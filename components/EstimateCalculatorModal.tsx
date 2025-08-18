@@ -3,7 +3,7 @@ import { Modal } from './Modal';
 import type { Project, Company, TeamMember } from '../types';
 import { Currency } from '../types';
 import { PRICING_DATA } from '../data/pricingData';
-import type { PriceEntry, Accessory } from '../data/pricingData';
+import type { PriceEntry, Accessory, PumpPriceData } from '../data/pricingData';
 
 type PumpVariant = keyof Omit<PriceEntry, 'length'>;
 
@@ -14,7 +14,7 @@ interface LineItem {
     isPump?: boolean;
     isTrunk?: boolean;
     isAccessory?: boolean;
-    pumpType?: keyof typeof PRICING_DATA.cargoPumps;
+    pumpType?: string;
     pumpVariant?: PumpVariant;
     pumpLength?: number;
     selectedOption?: string; // name of selected trunk/accessory
@@ -42,12 +42,12 @@ const getInitialLineItems = (): LineItem[] => {
     const initialPumpLength = 18;
     const initialQty = 2;
 
-    const pumpData = PRICING_DATA.cargoPumps[initialPumpType];
+    const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[initialPumpType];
     const priceEntry = pumpData.prices.find(p => p.length === initialPumpLength);
     const initialUnitPrice = priceEntry && initialPumpVariant in priceEntry ? (priceEntry[initialPumpVariant] as number) : 0;
 
     return [
-        { id: '1', description: 'Cargo Pump', isPump: true, pumpType: initialPumpType, pumpVariant: initialPumpVariant, pumpLength: initialPumpLength, qty: initialQty, unitPrice: initialUnitPrice },
+        { id: '1', description: 'Pump Type', isPump: true, pumpType: initialPumpType, pumpVariant: initialPumpVariant, pumpLength: initialPumpLength, qty: initialQty, unitPrice: initialUnitPrice },
         { id: '2', description: 'Trunk', isTrunk: true, selectedOption: 'None', qty: initialQty, unitPrice: 0 },
         { id: '3', description: 'Optional Accessories', sub: 'Well Suction', isAccessory: true, selectedOption: 'None', qty: initialQty, unitPrice: 0 },
         { id: '4', description: 'Additional Equipment', sub: 'Dummies SD100', qty: 0.2, unitPrice: 11000 },
@@ -108,10 +108,10 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
             const pumpItem = { ...newItems[pumpItemIndex] };
 
             if (field === 'pumpType' && typeof value === 'string') {
-                const newPumpType = value as keyof typeof PRICING_DATA.cargoPumps;
+                const newPumpType = value;
                 if (pumpItem.pumpType !== newPumpType) {
                     pumpItem.pumpType = newPumpType;
-                    const newPumpData = PRICING_DATA.cargoPumps[pumpItem.pumpType];
+                    const newPumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[pumpItem.pumpType as keyof typeof PRICING_DATA.cargoPumps];
                     if (newPumpData && newPumpData.prices.length > 0) {
                         const defaultLength = newPumpData.prices[0].length;
                         pumpItem.pumpLength = defaultLength;
@@ -138,12 +138,12 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
 
             // Recalculate price
             if (pumpItem.pumpType) {
-                const pumpData = PRICING_DATA.cargoPumps[pumpItem.pumpType];
+                const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[pumpItem.pumpType as keyof typeof PRICING_DATA.cargoPumps];
                 if (pumpData) {
                     const priceEntry = pumpData.prices.find(p => p.length === pumpItem.pumpLength);
                     const variantKey = pumpItem.pumpVariant;
                     if (priceEntry && variantKey && variantKey in priceEntry) {
-                        const price = priceEntry[variantKey];
+                        const price = (priceEntry as any)[variantKey];
                         pumpItem.unitPrice = typeof price === 'number' ? price : 0;
                     } else {
                         pumpItem.unitPrice = 0;
@@ -166,7 +166,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
             const pumpItem = newItems.find(i => i.isPump);
             if (!pumpItem || !pumpItem.pumpType) return prev;
 
-            const pumpData = PRICING_DATA.cargoPumps[pumpItem.pumpType];
+            const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[pumpItem.pumpType as keyof typeof PRICING_DATA.cargoPumps];
             let options: Accessory[] | undefined = [];
             if(item.isTrunk) options = pumpData.trunk;
             if(item.isAccessory) options = pumpData.optionalAccessories;
@@ -254,7 +254,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                         <tbody>
                             {lineItems.map(item => {
                                 if (item.isPump && item.pumpType && pumpItem) {
-                                    const pumpData = PRICING_DATA.cargoPumps[pumpItem.pumpType as keyof typeof PRICING_DATA.cargoPumps];
+                                    const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[pumpItem.pumpType];
                                     const availableLengths = pumpData ? pumpData.prices.map(p => p.length) : [];
                                     const availableVariants = pumpData && pumpData.prices.length > 0 ? Object.keys(pumpData.prices[0]).filter(k => k !== 'length') : [];
 
@@ -265,8 +265,15 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
 
                                     return (
                                         <React.Fragment key={item.id}>
-                                            <tr className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 align-top">
-                                                <td className="p-2 pt-3 font-semibold">{item.description}</td>
+                                            <tr className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 align-bottom">
+                                                <td className="p-2">
+                                                    <div className="font-semibold">{item.description}</div>
+                                                    {pumpItem?.pumpVariant && pumpVariantDescriptions[pumpItem.pumpVariant] && (
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400 font-normal mt-1">
+                                                            {pumpVariantDescriptions[pumpItem.pumpVariant]}
+                                                        </div>
+                                                    )}
+                                                </td>
                                                 <td className="p-2">
                                                     <div className="grid grid-cols-3 gap-2">
                                                         <div>
@@ -287,7 +294,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                                         </div>
                                                         <div>
                                                             <label className="text-xs text-gray-500 dark:text-gray-400">Length</label>
-                                                            <select value={item.pumpLength} onChange={e => handlePumpSelectionChange('pumpLength', Number(e.target.value))} className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600">
+                                                            <select value={item.pumpLength?.toString() || ''} onChange={e => handlePumpSelectionChange('pumpLength', Number(e.target.value))} className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600">
                                                                 {availableLengths.map(length => (
                                                                     <option key={length} value={length}>{length} m</option>
                                                                 ))}
@@ -295,25 +302,25 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="p-2 text-right pt-8">
+                                                <td className="p-2 text-right">
                                                     <input type="number" value={item.qty} onChange={e => handleItemChange(item.id, 'qty', parseFloat(e.target.value))} className="w-20 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
                                                 </td>
-                                                <td className="p-2 text-right font-medium pt-8">
+                                                <td className="p-2 text-right font-medium">
                                                     {(item.unitPrice || 0).toLocaleString('en-US')}
                                                 </td>
-                                                <td className="p-2 text-right font-medium pt-8">
+                                                <td className="p-2 text-right font-medium">
                                                     {(item.qty * (item.unitPrice || 0)).toLocaleString('en-US')}
                                                 </td>
                                             </tr>
                                             {trunkItem && accessoryItem && (
-                                                <tr className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 align-top">
-                                                    <td className="p-2 pt-3 font-semibold">Trunk / Accessories</td>
+                                                <tr className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 align-bottom">
+                                                    <td className="p-2 font-semibold">Trunk / Accessories</td>
                                                     <td className="p-2">
                                                         <div className="grid grid-cols-2 gap-2">
                                                             <div>
                                                                 <label className="text-xs text-gray-500 dark:text-gray-400">Trunk</label>
                                                                 <select
-                                                                    value={trunkItem.selectedOption}
+                                                                    value={trunkItem.selectedOption || ''}
                                                                     onChange={e => handleOptionChange(trunkItem.id, e.target.value)}
                                                                     disabled={!trunkOptions || trunkOptions.length === 0}
                                                                     className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-700"
@@ -327,7 +334,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                                             <div>
                                                                 <label className="text-xs text-gray-500 dark:text-gray-400">Optional Accessory</label>
                                                                 <select
-                                                                    value={accessoryItem.selectedOption}
+                                                                    value={accessoryItem.selectedOption || ''}
                                                                     onChange={e => handleOptionChange(accessoryItem.id, e.target.value)}
                                                                     disabled={!accessoryOptions || accessoryOptions.length === 0}
                                                                     className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-700"
@@ -340,13 +347,13 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="p-2 text-right pt-8">
+                                                    <td className="p-2 text-right">
                                                         <input type="number" readOnly value={trunkItem.qty} className="w-20 p-1 text-right bg-gray-100 dark:bg-gray-800 border rounded-md dark:border-gray-600" />
                                                     </td>
-                                                    <td className="p-2 text-right font-medium pt-8">
+                                                    <td className="p-2 text-right font-medium">
                                                         {totalAccessoryUnitPrice.toLocaleString('en-US')}
                                                     </td>
-                                                    <td className="p-2 text-right font-medium pt-8">
+                                                    <td className="p-2 text-right font-medium">
                                                         {totalAccessoryPrice.toLocaleString('en-US')}
                                                     </td>
                                                 </tr>
