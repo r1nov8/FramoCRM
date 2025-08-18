@@ -76,7 +76,7 @@ export interface Project {
     hedgeCurrency?: Currency;
     grossMarginPercent?: number;
     closingDate: string;
-    salesRepId: string;
+    salesRepId?: string;
     shipyardId: string;
     vesselOwnerId?: string;
     designCompanyId?: string;

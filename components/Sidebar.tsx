@@ -24,7 +24,6 @@ const stageColors: { [key in ProjectStage]: string } = {
 };
 
 export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects, teamMembers, selectedProjectId, onSelectProject, onAddProjectClick }) => {
-    const getSalesRep = (id: string) => teamMembers.find(tm => tm.id === id);
 
     return (
         <aside className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
@@ -41,7 +40,7 @@ export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects
             <div className="overflow-y-auto">
                 <ul>
                     {projects.map((project) => {
-                        const salesRep = getSalesRep(project.salesRepId);
+                        const salesRep = project.salesRepId ? teamMembers.find(tm => tm.id === project.salesRepId) : undefined;
                         return (
                             <li key={project.id}>
                                 <button
@@ -59,9 +58,13 @@ export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects
                                                 Value: ${project.value.toLocaleString()}
                                             </div>
                                         </div>
-                                        {salesRep && (
+                                        {salesRep ? (
                                             <div className="ml-2 w-8 h-8 flex-shrink-0 bg-blue-200 dark:bg-blue-900 rounded-full flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-300" title={salesRep.name}>
                                                 {salesRep.initials}
+                                            </div>
+                                        ) : (
+                                            <div className="ml-2 w-8 h-8 flex-shrink-0 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-xs font-bold text-gray-700 dark:text-gray-300" title="Unassigned">
+                                                ?
                                             </div>
                                         )}
                                     </div>

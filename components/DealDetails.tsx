@@ -61,7 +61,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     
     const findCompany = (id: string) => companies.find(c => c.id === id);
     const findContact = (id: string) => contacts.find(c => c.id === id);
-    const salesRep = teamMembers.find(tm => tm.id === project.salesRepId);
+    const salesRep = project.salesRepId ? teamMembers.find(tm => tm.id === project.salesRepId) : undefined;
 
     const shipyard = findCompany(project.shipyardId);
     const vesselOwner = project.vesselOwnerId ? findCompany(project.vesselOwnerId) : undefined;
@@ -142,12 +142,16 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                 <PencilIcon className="w-5 h-5" />
                             </button>
                         </div>
-                        {salesRep && (
+                        {salesRep ? (
                             <div className="flex items-center justify-end mt-2">
                                 <span className="text-sm font-medium text-gray-600 dark:text-gray-300 mr-2">{salesRep.name}</span>
                                 <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
                                     {salesRep.initials}
                                 </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-end mt-2">
+                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Unassigned</span>
                             </div>
                         )}
                     </div>

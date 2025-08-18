@@ -93,10 +93,16 @@ const App: React.FC = () => {
     };
 
     const handleDeleteTeamMember = (memberId: string) => {
-        if (projects.some(p => p.salesRepId === memberId)) {
-            alert("Cannot delete a team member who is assigned to one or more projects.");
-            return;
-        }
+        // Unassign projects from the deleted member
+        setProjects(prevProjects =>
+            prevProjects.map(p => {
+                if (p.salesRepId === memberId) {
+                    return { ...p, salesRepId: undefined };
+                }
+                return p;
+            })
+        );
+        // Remove the team member
         setTeamMembers(prev => prev.filter(m => m.id !== memberId));
     };
 
