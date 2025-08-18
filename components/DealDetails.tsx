@@ -144,8 +144,11 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                         </div>
                         {salesRep ? (
                             <div className="flex items-center justify-end mt-2">
-                                <span className="text-sm font-medium text-gray-600 dark:text-gray-300 mr-2">{salesRep.name}</span>
-                                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                <div className="text-right mr-2">
+                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300">{salesRep.name}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{salesRep.jobTitle}</p>
+                                </div>
+                                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
                                     {salesRep.initials}
                                 </div>
                             </div>

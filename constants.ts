@@ -18,9 +18,9 @@ export const INITIAL_CONTACTS: Contact[] = [
 ];
 
 export const INITIAL_TEAM_MEMBERS: TeamMember[] = [
-    { id: 'team-1', name: 'Stian Tørresen', initials: 'ST' },
-    { id: 'team-2', name: 'John Doe', initials: 'JD' },
-    { id: 'team-3', name: 'Jane Smith', initials: 'JS' },
+    { id: 'team-1', name: 'Stian Tørresen', initials: 'ST', jobTitle: 'Sales Manager' },
+    { id: 'team-2', name: 'John Doe', initials: 'JD', jobTitle: 'Sales Representative' },
+    { id: 'team-3', name: 'Jane Smith', initials: 'JS', jobTitle: 'Sales Engineer' },
 ];
 
 

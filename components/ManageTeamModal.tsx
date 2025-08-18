@@ -13,16 +13,18 @@ interface ManageTeamModalProps {
 export const ManageTeamModal: React.FC<ManageTeamModalProps> = ({ onClose, teamMembers, onAddTeamMember, onDeleteTeamMember }) => {
     const [newName, setNewName] = useState('');
     const [newInitials, setNewInitials] = useState('');
+    const [newJobTitle, setNewJobTitle] = useState('');
 
     const handleAddSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newName || !newInitials) {
-            alert('Please provide both a name and initials.');
+        if (!newName || !newInitials || !newJobTitle) {
+            alert('Please provide a name, initials, and job title.');
             return;
         }
-        onAddTeamMember({ name: newName, initials: newInitials.toUpperCase() });
+        onAddTeamMember({ name: newName, initials: newInitials.toUpperCase(), jobTitle: newJobTitle });
         setNewName('');
         setNewInitials('');
+        setNewJobTitle('');
     };
 
     const inputClass = "w-full p-2 border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none";
@@ -43,6 +45,19 @@ export const ManageTeamModal: React.FC<ManageTeamModalProps> = ({ onClose, teamM
                                 onChange={(e) => setNewName(e.target.value)}
                                 className={inputClass}
                                 placeholder="e.g. John Doe"
+                                required
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <label htmlFor="new-member-title" className={labelClass}>Job Title</label>
+                            <input
+                                id="new-member-title"
+                                type="text"
+                                value={newJobTitle}
+                                onChange={(e) => setNewJobTitle(e.target.value)}
+                                className={inputClass}
+                                placeholder="e.g. Sales Manager"
+                                required
                             />
                         </div>
                         <div className="w-24">
@@ -55,6 +70,7 @@ export const ManageTeamModal: React.FC<ManageTeamModalProps> = ({ onClose, teamM
                                 className={inputClass}
                                 placeholder="e.g. JD"
                                 maxLength={2}
+                                required
                             />
                         </div>
                         <button
@@ -73,10 +89,13 @@ export const ManageTeamModal: React.FC<ManageTeamModalProps> = ({ onClose, teamM
                         {teamMembers.map((member) => (
                             <li key={member.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
                                 <div className="flex items-center space-x-3">
-                                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
                                         {member.initials}
                                     </div>
-                                    <span className="font-medium">{member.name}</span>
+                                    <div>
+                                        <p className="font-medium">{member.name}</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">{member.jobTitle}</p>
+                                    </div>
                                 </div>
                                 <button
                                     onClick={() => onDeleteTeamMember(member.id)}

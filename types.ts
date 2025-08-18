@@ -55,6 +55,7 @@ export interface TeamMember {
     id: string;
     name: string;
     initials: string;
+    jobTitle: string;
 }
 
 export interface ProjectFile {
