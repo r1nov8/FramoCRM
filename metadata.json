@@ -1,0 +1,5 @@
+{
+  "name": "Framo AS - Marine Sales CRM",
+  "description": "A specialized CRM for the Liquified Gas & Fuel team at Framo AS to manage sales of cargo pumps like the SD-100 and SLG-25. It tracks deals with shipyards, vessel owners, and design companies, managing customer specifications and sales pipelines.",
+  "requestFramePermissions": []
+}

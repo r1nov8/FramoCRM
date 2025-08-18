@@ -1,0 +1,317 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import type { Company, Contact, Project, Product, TeamMember } from '../types';
+import { ProjectStage, ProductType, CompanyType, Currency } from '../types';
+import { Modal } from './Modal';
+import { PlusIcon, TrashIcon } from './icons';
+
+interface EditProjectModalProps {
+    onClose: () => void;
+    onUpdateProject: (project: Project) => void;
+    project: Project;
+    companies: Company[];
+    contacts: Contact[];
+    teamMembers: TeamMember[];
+    onAddCompanyClick: (type: CompanyType) => void;
+    onAddContactClick: () => void;
+}
+
+const lateStagesForOrderNumber = [ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON, ProjectStage.LOST, ProjectStage.CANCELLED];
+const stagesForGrossMargin = [ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON];
+const stagesForHedgeCurrency = [ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON, ProjectStage.LOST, ProjectStage.CANCELLED];
+
+export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onUpdateProject, project, companies, contacts, teamMembers, onAddCompanyClick, onAddContactClick }) => {
+    const [projectName, setProjectName] = useState('');
+    const [opportunityNumber, setOpportunityNumber] = useState('');
+    const [orderNumber, setOrderNumber] = useState('');
+    const [closingDate, setClosingDate] = useState('');
+    const [stage, setStage] = useState<ProjectStage>(ProjectStage.LEAD);
+    const [currency, setCurrency] = useState<Currency>(Currency.USD);
+    const [hedgeCurrency, setHedgeCurrency] = useState<Currency | ''>('');
+    const [grossMarginPercent, setGrossMarginPercent] = useState<number | ''>('');
+    const [salesRepId, setSalesRepId] = useState('');
+    const [shipyardId, setShipyardId] = useState('');
+    const [vesselOwnerId, setVesselOwnerId] = useState('');
+    const [designCompanyId, setDesignCompanyId] = useState('');
+    const [primaryContactId, setPrimaryContactId] = useState('');
+    const [notes, setNotes] = useState('');
+    const [products, setProducts] = useState<Product[]>([]);
+    const [numberOfVessels, setNumberOfVessels] = useState(1);
+    const [pumpsPerVessel, setPumpsPerVessel] = useState(1);
+    const [pricePerVessel, setPricePerVessel] = useState(0);
+
+    useEffect(() => {
+        if (project) {
+            setProjectName(project.name);
+            setOpportunityNumber(project.opportunityNumber);
+            setOrderNumber(project.orderNumber || '');
+            setClosingDate(project.closingDate);
+            setStage(project.stage);
+            setCurrency(project.currency);
+            setHedgeCurrency(project.hedgeCurrency || '');
+            setGrossMarginPercent(project.grossMarginPercent ?? '');
+            setSalesRepId(project.salesRepId);
+            setShipyardId(project.shipyardId);
+            setVesselOwnerId(project.vesselOwnerId || '');
+            setDesignCompanyId(project.designCompanyId || '');
+            setPrimaryContactId(project.primaryContactId);
+            setNotes(project.notes);
+            setProducts(project.products);
+            setNumberOfVessels(project.numberOfVessels);
+            setPumpsPerVessel(project.pumpsPerVessel);
+            setPricePerVessel(project.pricePerVessel);
+        }
+    }, [project]);
+
+
+    const totalProjectValue = useMemo(() => numberOfVessels * pricePerVessel, [numberOfVessels, pricePerVessel]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!projectName || !opportunityNumber || !salesRepId || !shipyardId || !primaryContactId || !currency) {
+            alert('Please fill in all required fields: Project Name, Opportunity No., Sales Rep, Shipyard, Primary Contact, and Currency.');
+            return;
+        }
+        if (lateStagesForOrderNumber.includes(stage) && !orderNumber) {
+            alert('Please provide an Order No. for projects in this stage.');
+            return;
+        }
+        if (stagesForHedgeCurrency.includes(stage) && !hedgeCurrency) {
+            alert('Please select a Hedge Currency for projects in this stage.');
+            return;
+        }
+
+        onUpdateProject({
+            ...project, // Keep the original ID
+            name: projectName,
+            opportunityNumber,
+            orderNumber: orderNumber || undefined,
+            value: totalProjectValue,
+            currency,
+            hedgeCurrency: hedgeCurrency || undefined,
+            grossMarginPercent: typeof grossMarginPercent === 'number' ? grossMarginPercent : undefined,
+            closingDate,
+            stage,
+            salesRepId,
+            shipyardId,
+            vesselOwnerId: vesselOwnerId || undefined,
+            designCompanyId: designCompanyId || undefined,
+            primaryContactId,
+            products,
+            notes,
+            numberOfVessels,
+            pumpsPerVessel,
+            pricePerVessel,
+        });
+    };
+
+    const handleProductChange = <K extends keyof Product,>(index: number, field: K, fieldValue: Product[K]) => {
+        const newProducts = [...products];
+        newProducts[index][field] = fieldValue;
+        setProducts(newProducts);
+    };
+    
+    const addProduct = () => {
+        setProducts([...products, { type: ProductType.SD_100, quantity: 1, capacity: 100, head: 100 }]);
+    };
+
+    const removeProduct = (index: number) => {
+        setProducts(products.filter((_, i) => i !== index));
+    };
+
+    const inputClass = "w-full p-2 border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none";
+    const labelClass = "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1";
+    const addButtonClass = "p-2 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 flex-shrink-0";
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Edit Project">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="projectName" className={labelClass}>Project Name</label>
+                        <input type="text" id="projectName" value={projectName} onChange={e => setProjectName(e.target.value)} className={inputClass} required />
+                    </div>
+                    <div>
+                        <label htmlFor="opportunityNumber" className={labelClass}>Opportunity No.</label>
+                        <input type="text" id="opportunityNumber" value={opportunityNumber} onChange={e => setOpportunityNumber(e.target.value)} className={inputClass} required />
+                    </div>
+                </div>
+
+                 <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                    <h3 className="font-semibold mb-2 text-gray-800 dark:text-gray-200">Commercial Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="numberOfVessels" className={labelClass}>No. of Vessels</label>
+                            <input type="number" id="numberOfVessels" min="1" value={numberOfVessels} onChange={e => setNumberOfVessels(Number(e.target.value))} className={inputClass} />
+                        </div>
+                        <div>
+                            <label htmlFor="pumpsPerVessel" className={labelClass}>Pumps per Vessel</label>
+                            <input type="number" id="pumpsPerVessel" min="1" value={pumpsPerVessel} onChange={e => setPumpsPerVessel(Number(e.target.value))} className={inputClass} />
+                        </div>
+                         <div>
+                            <label htmlFor="pricePerVessel" className={labelClass}>Price per Vessel</label>
+                            <input type="number" id="pricePerVessel" min="0" value={pricePerVessel} onChange={e => setPricePerVessel(Number(e.target.value))} className={inputClass} />
+                        </div>
+                        <div>
+                            <label htmlFor="currency" className={labelClass}>Currency</label>
+                            <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className={inputClass}>
+                                {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="mt-3 text-right">
+                        <span className={labelClass}>Total Project Value</span>
+                        <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{totalProjectValue.toLocaleString()} {currency}</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                        <label htmlFor="stage" className={labelClass}>Stage</label>
+                        <select id="stage" value={stage} onChange={e => setStage(e.target.value as ProjectStage)} className={inputClass}>
+                            {Object.values(ProjectStage).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                     <div>
+                        <label htmlFor="closingDate" className={labelClass}>Closing Date</label>
+                        <input type="date" id="closingDate" value={closingDate} onChange={e => setClosingDate(e.target.value)} className={inputClass} />
+                    </div>
+                </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {stagesForGrossMargin.includes(stage) && (
+                        <div>
+                            <label htmlFor="grossMargin" className={labelClass}>Gross Margin (%)</label>
+                            <input type="number" id="grossMargin" min="0" step="0.1" value={grossMarginPercent} onChange={e => setGrossMarginPercent(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                        </div>
+                    )}
+                    {lateStagesForOrderNumber.includes(stage) && (
+                        <div>
+                            <label htmlFor="orderNumber" className={labelClass}>Order No.</label>
+                            <input type="text" id="orderNumber" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} className={inputClass} required />
+                        </div>
+                    )}
+                    {stagesForHedgeCurrency.includes(stage) && (
+                        <div>
+                            <label htmlFor="hedgeCurrency" className={labelClass}>Hedge Currency</label>
+                            <select id="hedgeCurrency" value={hedgeCurrency} onChange={e => setHedgeCurrency(e.target.value as Currency)} className={inputClass} required>
+                                <option value="">Select Hedge Currency</option>
+                                {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                    )}
+                </div>
+
+                <div>
+                    <label htmlFor="salesRep" className={labelClass}>Sales Representative</label>
+                    <select id="salesRep" value={salesRepId} onChange={e => setSalesRepId(e.target.value)} className={inputClass} required>
+                        <option value="">Select Sales Rep</option>
+                        {teamMembers.map(tm => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+                    </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="shipyard" className={labelClass}>Shipyard</label>
+                        <div className="flex items-center space-x-2">
+                            <select id="shipyard" value={shipyardId} onChange={e => setShipyardId(e.target.value)} className={inputClass} required>
+                                <option value="">Select Shipyard</option>
+                                {companies.filter(c => c.type === CompanyType.SHIPYARD).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <button type="button" onClick={() => onAddCompanyClick(CompanyType.SHIPYARD)} className={addButtonClass} aria-label="Add new shipyard">
+                                <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label htmlFor="primaryContact" className={labelClass}>Primary Contact</label>
+                        <div className="flex items-center space-x-2">
+                            <select id="primaryContact" value={primaryContactId} onChange={e => setPrimaryContactId(e.target.value)} className={inputClass} required>
+                                <option value="">Select Contact</option>
+                                {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                             <button type="button" onClick={onAddContactClick} className={addButtonClass} aria-label="Add new contact">
+                                <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="vesselOwner" className={labelClass}>Vessel Owner (Optional)</label>
+                        <div className="flex items-center space-x-2">
+                            <select id="vesselOwner" value={vesselOwnerId} onChange={e => setVesselOwnerId(e.target.value)} className={inputClass}>
+                                <option value="">Select Vessel Owner</option>
+                                {companies.filter(c => c.type === CompanyType.VESSEL_OWNER).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <button type="button" onClick={() => onAddCompanyClick(CompanyType.VESSEL_OWNER)} className={addButtonClass} aria-label="Add new vessel owner">
+                                <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label htmlFor="designCompany" className={labelClass}>Design Company (Optional)</label>
+                        <div className="flex items-center space-x-2">
+                            <select id="designCompany" value={designCompanyId} onChange={e => setDesignCompanyId(e.target.value)} className={inputClass}>
+                                <option value="">Select Design Company</option>
+                                {companies.filter(c => c.type === CompanyType.DESIGN_COMPANY).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <button type="button" onClick={() => onAddCompanyClick(CompanyType.DESIGN_COMPANY)} className={addButtonClass} aria-label="Add new design company">
+                                <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className={labelClass + " mt-4 mb-2"}>Products</h3>
+                    <div className="space-y-4">
+                        {products.map((p, i) => (
+                            <div key={i} className="p-3 border rounded-md dark:border-gray-600 space-y-2 relative">
+                                {products.length > 1 && (
+                                     <button type="button" onClick={() => removeProduct(i)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500" aria-label="Remove product">
+                                         <TrashIcon className="w-4 h-4" />
+                                     </button>
+                                )}
+                                <div className="grid grid-cols-2 gap-4">
+                                     <div>
+                                        <label className="text-xs text-gray-500">Product Type</label>
+                                        <select value={p.type} onChange={e => handleProductChange(i, 'type', e.target.value as ProductType)} className={inputClass}>
+                                            {Object.values(ProductType).map(pt => <option key={pt} value={pt}>{pt}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-gray-500">Quantity</label>
+                                        <input type="number" min="1" value={p.quantity} onChange={e => handleProductChange(i, 'quantity', Number(e.target.value))} className={inputClass} />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-gray-500">Capacity (m³/h)</label>
+                                        <input type="number" min="0" value={p.capacity} onChange={e => handleProductChange(i, 'capacity', Number(e.target.value))} className={inputClass} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-gray-500">Head (mlc)</label>
+                                        <input type="number" min="0" value={p.head} onChange={e => handleProductChange(i, 'head', Number(e.target.value))} className={inputClass} />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                     <button type="button" onClick={addProduct} className="mt-2 flex items-center text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                        <PlusIcon className="w-4 h-4 mr-1" /> Add Product
+                    </button>
+                </div>
+
+                <div>
+                    <label htmlFor="notes" className={labelClass}>Notes</label>
+                    <textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} rows={4} className={inputClass}></textarea>
+                </div>
+
+                <div className="flex justify-end pt-4">
+                    <button type="button" onClick={onClose} className="mr-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">Cancel</button>
+                    <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Save Changes</button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
