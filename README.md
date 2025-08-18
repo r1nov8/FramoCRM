@@ -16,5 +16,9 @@ View your app in AI Studio: https://ai.studio/apps/drive/1LU0H7WJrzGpVFUX0ljk_jv
 1. Install dependencies:
    `npm install`
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+3. Start the price list backend:
+   `npm run server`
+4. Run the app:
    `npm run dev`
+
+Place your `pricelist.xlsx` file in the `server/` directory. The backend reads this workbook on startup and exposes the data at `/api/pricelist`.

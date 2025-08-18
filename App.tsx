@@ -9,8 +9,9 @@ import { AddCompanyModal } from './components/AddCompanyModal';
 import { AddContactModal } from './components/AddContactModal';
 import { ManageTeamModal } from './components/ManageTeamModal';
 import { HPUCalculatorModal } from './components/HPUCalculatorModal';
+import { EstimateCalculatorModal } from './components/EstimateCalculatorModal';
 import type { Project, Company, Contact, TeamMember, ProjectFile } from './types';
-import { CompanyType } from './types';
+import { CompanyType, ProjectStage } from './types';
 import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS, INITIAL_TEAM_MEMBERS } from './constants';
 
 type View = 'dashboard' | 'pipeline';
@@ -29,6 +30,7 @@ const App: React.FC = () => {
     const [isAddContactModalOpen, setIsAddContactModalOpen] = useState(false);
     const [isManageTeamModalOpen, setIsManageTeamModalOpen] = useState(false);
     const [isHPUCalculatorOpen, setIsHPUCalculatorOpen] = useState(false);
+    const [isEstimateCalculatorOpen, setIsEstimateCalculatorOpen] = useState(false);
     
     const [companyTypeForModal, setCompanyTypeForModal] = useState<CompanyType | undefined>(undefined);
     const [activeView, setActiveView] = useState<View>('dashboard');
@@ -233,7 +235,17 @@ const App: React.FC = () => {
             )}
             {isHPUCalculatorOpen && (
                 <HPUCalculatorModal
-                    onClose={() => setIsHPUCalculatorOpen(false)}
+                    onClose={() => {
+                        setIsHPUCalculatorOpen(false);
+                        if (selectedProject?.stage === ProjectStage.QUOTE) {
+                            setIsEstimateCalculatorOpen(true);
+                        }
+                    }}
+                />
+            )}
+            {isEstimateCalculatorOpen && (
+                <EstimateCalculatorModal
+                    onClose={() => setIsEstimateCalculatorOpen(false)}
                 />
             )}
         </div>
