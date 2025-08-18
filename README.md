@@ -21,4 +21,6 @@ View your app in AI Studio: https://ai.studio/apps/drive/1LU0H7WJrzGpVFUX0ljk_jv
 4. Run the app:
    `npm run dev`
 
+Both servers bind to `0.0.0.0`. On a local machine, open the frontend at `http://localhost:5173`. If you're running in a container or remote VM, replace `localhost` with the host's IP (for example `http://<host-ip>:5173` for the frontend and `http://<host-ip>:3001` for the backend).
+
 Place your `pricelist.xlsx` file in the `server/` directory. The backend reads this workbook on startup and exposes the data at `/api/pricelist`.
