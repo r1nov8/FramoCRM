@@ -73,7 +73,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     
     const [lineItems, setLineItems] = useState<LineItem[]>(getInitialLineItems());
     const [usdRate, setUsdRate] = useState(8.70);
-    const [eurRate, setEurRate] = useState(7.80);
+    const [eurRate, setEurRate] = useState(11.70);
     const [surchargePercent, setSurchargePercent] = useState(15);
     const [provisionPercent, setProvisionPercent] = useState(4.0);
     const [profitMarginPercent, setProfitMarginPercent] = useState(50.0);
@@ -223,6 +223,8 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     }, [salesPriceNOK, eurRate]);
     
     const pumpItem = lineItems.find(item => item.isPump);
+    const trunkItem = lineItems.find(item => item.isTrunk);
+    const accessoryItem = lineItems.find(item => item.isAccessory);
 
     return (
         <Modal isOpen={true} onClose={onClose} title="Estimate Calculator" size="7xl">
@@ -256,84 +258,108 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                     const availableLengths = pumpData ? pumpData.prices.map(p => p.length) : [];
                                     const availableVariants = pumpData && pumpData.prices.length > 0 ? Object.keys(pumpData.prices[0]).filter(k => k !== 'length') : [];
 
-                                    return (
-                                        <tr key={item.id} className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 align-top">
-                                            <td className="p-2 pt-3 font-semibold">{item.description}</td>
-                                            <td className="p-2" colSpan={2}>
-                                                <div className="grid grid-cols-3 gap-2">
-                                                    <div>
-                                                        <label className="text-xs text-gray-500 dark:text-gray-400">Pump Type</label>
-                                                        <select value={item.pumpType} onChange={e => handlePumpSelectionChange('pumpType', e.target.value)} className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600">
-                                                            {Object.keys(PRICING_DATA.cargoPumps).map(pumpType => (
-                                                                <option key={pumpType} value={pumpType}>{pumpType}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                         <label className="text-xs text-gray-500 dark:text-gray-400">Variant</label>
-                                                         <select value={item.pumpVariant} onChange={e => handlePumpSelectionChange('pumpVariant', e.target.value)} className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600">
-                                                            {availableVariants.map(variant => (
-                                                                <option key={variant} value={variant} title={pumpVariantDescriptions[variant]}>{variant}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs text-gray-500 dark:text-gray-400">Length</label>
-                                                        <select value={item.pumpLength} onChange={e => handlePumpSelectionChange('pumpLength', Number(e.target.value))} className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600">
-                                                            {availableLengths.map(length => (
-                                                                <option key={length} value={length}>{length} m</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-2 text-right pt-8">
-                                                <input type="number" value={item.qty} onChange={e => handleItemChange(item.id, 'qty', parseFloat(e.target.value))} className="w-20 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
-                                            </td>
-                                            <td className="p-2 text-right font-medium pt-8">
-                                                {(item.unitPrice || 0).toLocaleString('en-US')}
-                                            </td>
-                                            <td className="p-2 text-right font-medium pt-8">
-                                                {(item.qty * (item.unitPrice || 0)).toLocaleString('en-US')}
-                                            </td>
-                                        </tr>
-                                    );
-                                } else if (item.isTrunk || item.isAccessory) {
-                                    const pumpData = pumpItem?.pumpType ? PRICING_DATA.cargoPumps[pumpItem.pumpType] : undefined;
-                                    const options = item.isTrunk ? pumpData?.trunk : pumpData?.optionalAccessories;
+                                    const trunkOptions = pumpData?.trunk;
+                                    const accessoryOptions = pumpData?.optionalAccessories;
+                                    const totalAccessoryUnitPrice = (trunkItem?.unitPrice || 0) + (accessoryItem?.unitPrice || 0);
+                                    const totalAccessoryPrice = (trunkItem?.qty || 0) * totalAccessoryUnitPrice;
 
                                     return (
-                                         <tr key={item.id} className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50">
-                                            <td className="p-2 font-semibold">{item.description}<p className="text-xs font-normal text-gray-500">{item.sub}</p></td>
-                                            <td className="p-2" colSpan={2}>
-                                                 <select 
-                                                    value={item.selectedOption} 
-                                                    onChange={e => handleOptionChange(item.id, e.target.value)}
-                                                    disabled={!options || options.length === 0}
-                                                    className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-700"
-                                                >
-                                                    <option value="None">None</option>
-                                                    {options?.map(opt => (
-                                                        <option key={opt.name} value={opt.name}>{opt.name}</option>
-                                                    ))}
-                                                </select>
-                                            </td>
-                                            <td className="p-2 text-right">
-                                                <input type="number" readOnly value={item.qty} className="w-20 p-1 text-right bg-gray-100 dark:bg-gray-800 border rounded-md dark:border-gray-600" />
-                                            </td>
-                                            <td className="p-2 text-right font-medium">
-                                                {(item.unitPrice || 0).toLocaleString('en-US')}
-                                            </td>
-                                            <td className="p-2 text-right font-medium">
-                                                {(item.qty * (item.unitPrice || 0)).toLocaleString('en-US')}
-                                            </td>
-                                        </tr>
+                                        <React.Fragment key={item.id}>
+                                            <tr className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 align-top">
+                                                <td className="p-2 pt-3 font-semibold">{item.description}</td>
+                                                <td className="p-2">
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <div>
+                                                            <label className="text-xs text-gray-500 dark:text-gray-400">Pump Type</label>
+                                                            <select value={item.pumpType} onChange={e => handlePumpSelectionChange('pumpType', e.target.value)} className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600">
+                                                                {Object.keys(PRICING_DATA.cargoPumps).map(pumpType => (
+                                                                    <option key={pumpType} value={pumpType}>{pumpType}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-xs text-gray-500 dark:text-gray-400">Variant</label>
+                                                            <select value={item.pumpVariant || ''} onChange={e => handlePumpSelectionChange('pumpVariant', e.target.value)} className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600">
+                                                                {availableVariants.map(variant => (
+                                                                    <option key={variant} value={variant} title={pumpVariantDescriptions[variant]}>{variant}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-xs text-gray-500 dark:text-gray-400">Length</label>
+                                                            <select value={item.pumpLength} onChange={e => handlePumpSelectionChange('pumpLength', Number(e.target.value))} className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600">
+                                                                {availableLengths.map(length => (
+                                                                    <option key={length} value={length}>{length} m</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-2 text-right pt-8">
+                                                    <input type="number" value={item.qty} onChange={e => handleItemChange(item.id, 'qty', parseFloat(e.target.value))} className="w-20 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
+                                                </td>
+                                                <td className="p-2 text-right font-medium pt-8">
+                                                    {(item.unitPrice || 0).toLocaleString('en-US')}
+                                                </td>
+                                                <td className="p-2 text-right font-medium pt-8">
+                                                    {(item.qty * (item.unitPrice || 0)).toLocaleString('en-US')}
+                                                </td>
+                                            </tr>
+                                            {trunkItem && accessoryItem && (
+                                                <tr className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 align-top">
+                                                    <td className="p-2 pt-3 font-semibold">Trunk / Accessories</td>
+                                                    <td className="p-2">
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <label className="text-xs text-gray-500 dark:text-gray-400">Trunk</label>
+                                                                <select
+                                                                    value={trunkItem.selectedOption}
+                                                                    onChange={e => handleOptionChange(trunkItem.id, e.target.value)}
+                                                                    disabled={!trunkOptions || trunkOptions.length === 0}
+                                                                    className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-700"
+                                                                >
+                                                                    <option value="None">None</option>
+                                                                    {trunkOptions?.map(opt => (
+                                                                        <option key={opt.name} value={opt.name}>{opt.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-xs text-gray-500 dark:text-gray-400">Optional Accessory</label>
+                                                                <select
+                                                                    value={accessoryItem.selectedOption}
+                                                                    onChange={e => handleOptionChange(accessoryItem.id, e.target.value)}
+                                                                    disabled={!accessoryOptions || accessoryOptions.length === 0}
+                                                                    className="w-full p-1 bg-transparent border rounded-md dark:border-gray-600 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-700"
+                                                                >
+                                                                    <option value="None">None</option>
+                                                                    {accessoryOptions?.map(opt => (
+                                                                        <option key={opt.name} value={opt.name}>{opt.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-2 text-right pt-8">
+                                                        <input type="number" readOnly value={trunkItem.qty} className="w-20 p-1 text-right bg-gray-100 dark:bg-gray-800 border rounded-md dark:border-gray-600" />
+                                                    </td>
+                                                    <td className="p-2 text-right font-medium pt-8">
+                                                        {totalAccessoryUnitPrice.toLocaleString('en-US')}
+                                                    </td>
+                                                    <td className="p-2 text-right font-medium pt-8">
+                                                        {totalAccessoryPrice.toLocaleString('en-US')}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                     );
+                                } else if (item.isTrunk || item.isAccessory) {
+                                    return null;
                                 }
                                 return (
                                     <tr key={item.id} className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50">
                                         <td className="p-2 font-semibold">{item.description}</td>
-                                        <td className="p-2 text-gray-600 dark:text-gray-400" colSpan={2}>{item.sub}</td>
+                                        <td className="p-2 text-gray-600 dark:text-gray-400">{item.sub}</td>
                                         <td className="p-2 text-right">
                                             <input type="number" value={item.qty} onChange={e => handleItemChange(item.id, 'qty', parseFloat(e.target.value))} step="0.1" className="w-20 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
                                         </td>
@@ -424,6 +450,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                             <p className="font-semibold">Comments:</p>
                             <p>Kirk says WMMP is approx. USD 100,000 incl. stainless pipe / hydraulics.</p>
                             <p>Yard states that the Framo price is RMB 2,255,000 (approx. USD 315K with a rate of 0.140).</p>
+                            <p className="mt-2 text-xs italic">Note from PDF: Cost Price Plate: €5.50, Cost Price Pipe: €7.00</p>
                         </div>
                     </div>
                 </div>
