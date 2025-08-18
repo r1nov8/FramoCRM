@@ -8,8 +8,9 @@ import { EditProjectModal } from './components/EditProjectModal';
 import { AddCompanyModal } from './components/AddCompanyModal';
 import { AddContactModal } from './components/AddContactModal';
 import { ManageTeamModal } from './components/ManageTeamModal';
-import { HPUCalculatorModal } from './components/HPUCalculatorModal';
-import type { Project, Company, Contact, TeamMember, ProjectFile } from './types';
+import { HPUSizingModal } from './components/HPUSizingModal';
+import { EstimateCalculatorModal } from './components/EstimateCalculatorModal';
+import type { Project, Company, Contact, TeamMember, ProjectFile, Currency } from './types';
 import { CompanyType } from './types';
 import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS, INITIAL_TEAM_MEMBERS } from './constants';
 
@@ -28,7 +29,8 @@ const App: React.FC = () => {
     const [isAddCompanyModalOpen, setIsAddCompanyModalOpen] = useState(false);
     const [isAddContactModalOpen, setIsAddContactModalOpen] = useState(false);
     const [isManageTeamModalOpen, setIsManageTeamModalOpen] = useState(false);
-    const [isHPUCalculatorOpen, setIsHPUCalculatorOpen] = useState(false);
+    const [isHPUSizingModalOpen, setIsHPUSizingModalOpen] = useState(false);
+    const [isEstimateCalculatorOpen, setIsEstimateCalculatorOpen] = useState(false);
     
     const [companyTypeForModal, setCompanyTypeForModal] = useState<CompanyType | undefined>(undefined);
     const [activeView, setActiveView] = useState<View>('dashboard');
@@ -148,6 +150,25 @@ const App: React.FC = () => {
         );
     };
 
+    const handleUpdateProjectPrice = (price: number, currency: Currency) => {
+        if (selectedProjectId) {
+            setProjects(prevProjects =>
+                prevProjects.map(p => {
+                    if (p.id === selectedProjectId) {
+                        return {
+                            ...p,
+                            pricePerVessel: price,
+                            currency: currency,
+                            value: p.numberOfVessels * price,
+                        };
+                    }
+                    return p;
+                })
+            );
+            setIsEstimateCalculatorOpen(false);
+        }
+    };
+
     const pageTitle = useMemo(() => {
         if (activeView === 'pipeline') return 'Project Pipeline';
         return 'Dashboard';
@@ -178,7 +199,8 @@ const App: React.FC = () => {
                         selectedProject={selectedProject}
                         onUploadFiles={handleUploadFiles}
                         onDeleteFile={handleDeleteFile}
-                        onOpenHPUCalculator={() => setIsHPUCalculatorOpen(true)}
+                        onOpenHPUSizing={() => setIsHPUSizingModalOpen(true)}
+                        onOpenEstimateCalculator={() => setIsEstimateCalculatorOpen(true)}
                     />
                 )}
             </div>
@@ -231,9 +253,18 @@ const App: React.FC = () => {
                     onDeleteTeamMember={handleDeleteTeamMember}
                 />
             )}
-            {isHPUCalculatorOpen && (
-                <HPUCalculatorModal
-                    onClose={() => setIsHPUCalculatorOpen(false)}
+            {isHPUSizingModalOpen && (
+                <HPUSizingModal
+                    onClose={() => setIsHPUSizingModalOpen(false)}
+                />
+            )}
+            {isEstimateCalculatorOpen && selectedProject && (
+                <EstimateCalculatorModal
+                    project={selectedProject}
+                    companies={companies}
+                    teamMembers={teamMembers}
+                    onClose={() => setIsEstimateCalculatorOpen(false)}
+                    onUpdateProjectPrice={handleUpdateProjectPrice}
                 />
             )}
         </div>

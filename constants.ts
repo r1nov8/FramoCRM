@@ -1,5 +1,5 @@
 import type { Company, Contact, Project, TeamMember } from './types';
-import { CompanyType, ProjectStage, ProductType, Currency } from './types';
+import { CompanyType, ProjectStage, ProductType, Currency, VesselSizeUnit, FuelType } from './types';
 
 export const INITIAL_COMPANIES: Company[] = [
     { id: 'comp-1', name: 'Hyundai Heavy Industries', type: CompanyType.SHIPYARD, location: 'Ulsan, South Korea' },
@@ -40,12 +40,15 @@ export const INITIAL_PROJECTS: Project[] = [
         designCompanyId: 'comp-3',
         primaryContactId: 'cont-1',
         products: [
-            { type: ProductType.SD_100, quantity: 4, capacity: 150, head: 120 },
+            { type: ProductType.SD_100_METHANOL, quantity: 4, capacity: 150, head: 120 },
         ],
         notes: 'Initial quotation sent. Waiting for feedback on technical specifications. Follow up next week.',
         numberOfVessels: 5,
         pumpsPerVessel: 2,
         pricePerVessel: 250000,
+        vesselSize: 65000,
+        vesselSizeUnit: VesselSizeUnit.DWT,
+        fuelType: FuelType.METHANOL,
         files: [],
     },
     {
@@ -70,6 +73,9 @@ export const INITIAL_PROJECTS: Project[] = [
         numberOfVessels: 2,
         pumpsPerVessel: 4,
         pricePerVessel: 490000,
+        vesselSize: 15000,
+        vesselSizeUnit: VesselSizeUnit.TEU,
+        fuelType: FuelType.LNG,
         files: [],
     },
     {
@@ -77,7 +83,7 @@ export const INITIAL_PROJECTS: Project[] = [
         name: 'Maersk Retrofit Project',
         opportunityNumber: 'OPP-2024-003',
         stage: ProjectStage.LEAD,
-        value: 750000,
+        value: 0, // To be estimated
         currency: Currency.NOK,
         closingDate: '2025-03-10',
         salesRepId: 'team-3',
@@ -85,12 +91,15 @@ export const INITIAL_PROJECTS: Project[] = [
         vesselOwnerId: 'comp-2',
         primaryContactId: 'cont-2',
         products: [
-            { type: ProductType.SD_100, quantity: 2, capacity: 120, head: 100 },
+            { type: ProductType.SD_100_METHANOL, quantity: 2, capacity: 120, head: 100 },
         ],
         notes: 'Early stage lead from a marketing campaign. Initial contact made.',
         numberOfVessels: 10,
         pumpsPerVessel: 1,
-        pricePerVessel: 75000,
+        pricePerVessel: undefined,
+        vesselSize: 18000,
+        vesselSizeUnit: VesselSizeUnit.TEU,
+        fuelType: FuelType.NH3,
         files: [],
     },
 ];

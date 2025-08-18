@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import type { Company, Contact, Project, Product, TeamMember } from '../types';
-import { ProjectStage, ProductType, CompanyType, Currency } from '../types';
+import { ProjectStage, ProductType, CompanyType, Currency, VesselSizeUnit, FuelType } from '../types';
 import { Modal } from './Modal';
 import { PlusIcon, TrashIcon } from './icons';
 
@@ -36,9 +36,9 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     const [products, setProducts] = useState<Product[]>([{ type: ProductType.SD_100, quantity: 1, capacity: 100, head: 100 }]);
     const [numberOfVessels, setNumberOfVessels] = useState(1);
     const [pumpsPerVessel, setPumpsPerVessel] = useState(1);
-    const [pricePerVessel, setPricePerVessel] = useState(0);
-
-    const totalProjectValue = useMemo(() => numberOfVessels * pricePerVessel, [numberOfVessels, pricePerVessel]);
+    const [vesselSize, setVesselSize] = useState<number | ''>('');
+    const [vesselSizeUnit, setVesselSizeUnit] = useState<VesselSizeUnit>(VesselSizeUnit.DWT);
+    const [fuelType, setFuelType] = useState<FuelType>(FuelType.METHANOL);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -58,7 +58,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
             name: projectName,
             opportunityNumber,
             orderNumber: orderNumber || undefined,
-            value: totalProjectValue,
+            value: 0, // Initial value is 0, will be updated by calculator
             currency,
             hedgeCurrency: hedgeCurrency || undefined,
             grossMarginPercent: typeof grossMarginPercent === 'number' ? grossMarginPercent : undefined,
@@ -73,7 +73,10 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
             notes,
             numberOfVessels,
             pumpsPerVessel,
-            pricePerVessel,
+            pricePerVessel: undefined, // Price is set via calculator
+            vesselSize: typeof vesselSize === 'number' ? vesselSize : undefined,
+            vesselSizeUnit: vesselSizeUnit || undefined,
+            fuelType,
             files: [],
         });
     };
@@ -122,19 +125,30 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                             <input type="number" id="pumpsPerVessel" min="1" value={pumpsPerVessel} onChange={e => setPumpsPerVessel(Number(e.target.value))} className={inputClass} />
                         </div>
                         <div>
-                            <label htmlFor="pricePerVessel" className={labelClass}>Price per Vessel</label>
-                            <input type="number" id="pricePerVessel" min="0" value={pricePerVessel} onChange={e => setPricePerVessel(Number(e.target.value))} className={inputClass} />
+                            <label htmlFor="fuelType" className={labelClass}>Fuel Type</label>
+                             <select id="fuelType" value={fuelType} onChange={e => setFuelType(e.target.value as FuelType)} className={inputClass}>
+                                {Object.values(FuelType).map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
                         </div>
                         <div>
-                            <label htmlFor="currency" className={labelClass}>Currency</label>
+                            <label htmlFor="vesselSize" className={labelClass}>Vessel Size</label>
+                            <div className="flex space-x-2">
+                                <input type="number" id="vesselSize" min="0" value={vesselSize} onChange={e => setVesselSize(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                                <select value={vesselSizeUnit} onChange={e => setVesselSizeUnit(e.target.value as VesselSizeUnit)} className={inputClass}>
+                                    {Object.values(VesselSizeUnit).map(u => <option key={u} value={u}>{u}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label htmlFor="currency" className={labelClass}>Default Currency</label>
                             <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className={inputClass}>
                                 {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                     </div>
-                    <div className="mt-3 text-right">
+                     <div className="mt-3 text-right">
                         <span className={labelClass}>Total Project Value</span>
-                        <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{totalProjectValue.toLocaleString()} {currency}</p>
+                        <p className="text-lg font-bold text-gray-500 dark:text-gray-400 italic">To be estimated</p>
                     </div>
                 </div>
 

@@ -17,8 +17,33 @@ export enum ProjectStage {
 }
 
 export enum ProductType {
-    SD_100 = 'SD-100 (Methanol)',
+    // Cargo Pumps
+    SD_100 = 'SD-100',
+    SD_125 = 'SD-125',
+    SD_150 = 'SD-150',
+    SD_200 = 'SD-200',
+    SD_250 = 'SD-250',
+    SD_250L = 'SD-250L',
+    SD_300L = 'SD-300L',
+    SD_350 = 'SD-350',
+
+    // Portable Pumps
+    TK_80 = 'TK-80',
+    TK_100 = 'TK-100',
+    TK_150 = 'TK-150',
+
+    // Ballast Pumps
+    SB_125 = 'SB-125',
+    SB_200 = 'SB-200',
+    SB_300 = 'SB-300',
+    SB_400 = 'SB-400',
+    SB_600 = 'SB-600',
+
+    // Other/Legacy
+    SD_100_METHANOL = 'SD-100 (Methanol)',
     SLG_25 = 'SLG-25 (LNF)',
+    DUMMY_SD100 = 'Dummy SD100',
+    HYDRAULIC_MODULE = 'Hydraulic Module',
 }
 
 export enum Currency {
@@ -27,6 +52,17 @@ export enum Currency {
     NOK = 'NOK',
     JPY = 'JPY',
     KRW = 'KRW',
+}
+
+export enum VesselSizeUnit {
+    DWT = 'DWT',
+    TEU = 'TEU',
+}
+
+export enum FuelType {
+    METHANOL = 'Methanol',
+    LNG = 'LNG',
+    NH3 = 'NH3',
 }
 
 export interface Company {
@@ -52,7 +88,7 @@ export interface Product {
 }
 
 export interface TeamMember {
-    id: string;
+    id:string;
     name: string;
     initials: string;
     jobTitle: string;
@@ -72,7 +108,7 @@ export interface Project {
     opportunityNumber: string;
     orderNumber?: string;
     stage: ProjectStage;
-    value: number; // This will be calculated: numberOfVessels * pricePerVessel
+    value: number;
     currency: Currency;
     hedgeCurrency?: Currency;
     grossMarginPercent?: number;
@@ -86,6 +122,9 @@ export interface Project {
     notes: string;
     numberOfVessels: number;
     pumpsPerVessel: number;
-    pricePerVessel: number;
+    pricePerVessel?: number;
+    vesselSize?: number;
+    vesselSizeUnit?: VesselSizeUnit;
+    fuelType: FuelType;
     files: ProjectFile[];
 }

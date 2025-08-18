@@ -4,7 +4,7 @@ import { ProjectStage, Currency } from '../types';
 import { CompanyCard } from './CompanyCard';
 import { ContactCard } from './ContactCard';
 import { ProductInfo } from './ProductInfo';
-import { PencilIcon, DollarIcon, PercentIcon, UploadIcon, DownloadIcon, TrashIcon, FileIcon, FileDocIcon, FilePdfIcon, CalculatorIcon } from './icons';
+import { PencilIcon, DollarIcon, PercentIcon, UploadIcon, DownloadIcon, TrashIcon, FileIcon, FileDocIcon, FilePdfIcon, CalculatorIcon, WrenchScrewdriverIcon } from './icons';
 
 interface ProjectDetailsProps {
     project: Project;
@@ -14,7 +14,8 @@ interface ProjectDetailsProps {
     onEditProject: () => void;
     onUploadFiles: (projectId: string, files: FileList) => void;
     onDeleteFile: (projectId: string, fileId: string) => void;
-    onOpenHPUCalculator: () => void;
+    onOpenHPUSizing: () => void;
+    onOpenEstimateCalculator: () => void;
 }
 
 const getCurrencySymbol = (currency: Currency): string => {
@@ -56,7 +57,7 @@ const stageProgress: { [key in ProjectStage]: number } = {
 
 const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON];
 
-export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUCalculator }) => {
+export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     
     const findCompany = (id: string) => companies.find(c => c.id === id);
@@ -91,7 +92,8 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
 
     const showGrossMargin = project.grossMarginPercent !== undefined && [ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON].includes(project.stage);
     const showHedgeCurrency = project.hedgeCurrency && [ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON, ProjectStage.LOST, ProjectStage.CANCELLED].includes(project.stage);
-    const showHPUCalculator = [ProjectStage.RFQ, ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON].includes(project.stage);
+    
+    const showTools = [ProjectStage.RFQ, ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON].includes(project.stage);
 
 
     const handleFileUploadClick = () => {
@@ -112,6 +114,8 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
         link.click();
         document.body.removeChild(link);
     };
+    
+    const isPriceEstimated = project.pricePerVessel !== undefined && project.pricePerVessel > 0;
 
     return (
         <div className="space-y-6">
@@ -123,7 +127,12 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                             <span>Opp. No: <span className="font-semibold text-gray-700 dark:text-gray-300">{project.opportunityNumber}</span></span>
                              {project.orderNumber && <span className="border-l border-gray-300 dark:border-gray-600 pl-4">Order No: <span className="font-semibold text-gray-700 dark:text-gray-300">{project.orderNumber}</span></span>}
                         </div>
-                        <p className="text-lg text-gray-600 dark:text-gray-300 mt-2">Value: <span className="font-semibold text-blue-600 dark:text-blue-400">{currencySymbol}{project.value.toLocaleString()} {project.currency}</span></p>
+                        <p className="text-lg text-gray-600 dark:text-gray-300 mt-2">
+                            Value: {isPriceEstimated ? 
+                                <span className="font-semibold text-blue-600 dark:text-blue-400">{currencySymbol}{project.value.toLocaleString()} {project.currency}</span>
+                                : <span className="font-semibold text-gray-500 dark:text-gray-400 italic">To be estimated</span>
+                            }
+                        </p>
                          <p className="text-sm text-gray-500 dark:text-gray-400">Closing Date: {new Date(project.closingDate).toLocaleDateString()}</p>
                     </div>
                      <div className="text-right">
@@ -189,16 +198,34 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                         </div>
                     </div>
                     
-                    {showHPUCalculator && (
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                            <div className="flex justify-between items-center">
-                                 <h2 className="text-xl font-semibold flex items-center"><CalculatorIcon className="w-6 h-6 mr-2 text-gray-500" /> HPU Sizing Calculator</h2>
-                                 <button 
-                                    onClick={onOpenHPUCalculator}
-                                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
-                                >
-                                    Open Calculator
-                                </button>
+                    {showTools && (
+                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                            <h2 className="text-xl font-semibold mb-4 flex items-center"><WrenchScrewdriverIcon className="w-6 h-6 mr-2 text-gray-500" /> Tools & Analysis</h2>
+                            <div className="flex flex-wrap gap-4">
+                                <div className="flex-1 min-w-[200px] p-4 border dark:border-gray-700 rounded-lg flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">
+                                    <div>
+                                        <h3 className="font-semibold flex items-center"><CalculatorIcon className="w-5 h-5 mr-2 text-gray-500" /> Estimate Calculator</h3>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Create a detailed cost estimate.</p>
+                                    </div>
+                                    <button 
+                                        onClick={onOpenEstimateCalculator}
+                                        className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
+                                    >
+                                        Open
+                                    </button>
+                                </div>
+                                <div className="flex-1 min-w-[200px] p-4 border dark:border-gray-700 rounded-lg flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">
+                                    <div>
+                                        <h3 className="font-semibold flex items-center"><CalculatorIcon className="w-5 h-5 mr-2 text-gray-500" /> HPU Sizing</h3>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Calculate hydraulic power unit size.</p>
+                                    </div>
+                                    <button 
+                                        onClick={onOpenHPUSizing}
+                                        className="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
+                                    >
+                                        Open
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -252,6 +279,10 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                         <h2 className="text-xl font-semibold mb-4 flex items-center"><DollarIcon className="w-6 h-6 mr-2 text-gray-500" /> Commercial Overview</h2>
                         <div className="space-y-3 text-sm">
+                             <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Fuel Type</span>
+                                <span className="font-semibold text-gray-800 dark:text-gray-200">{project.fuelType}</span>
+                            </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-600 dark:text-gray-400">Number of Vessels</span>
                                 <span className="font-semibold text-gray-800 dark:text-gray-200">{project.numberOfVessels}</span>
@@ -260,9 +291,18 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                 <span className="text-gray-600 dark:text-gray-400">Pumps per Vessel</span>
                                 <span className="font-semibold text-gray-800 dark:text-gray-200">{project.pumpsPerVessel}</span>
                             </div>
+                             {project.vesselSize && project.vesselSizeUnit && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Vessel Size</span>
+                                    <span className="font-semibold text-gray-800 dark:text-gray-200">{project.vesselSize.toLocaleString()} {project.vesselSizeUnit}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between">
                                 <span className="text-gray-600 dark:text-gray-400">Price per Vessel</span>
-                                <span className="font-semibold text-gray-800 dark:text-gray-200">{currencySymbol}{project.pricePerVessel.toLocaleString()}</span>
+                                {isPriceEstimated ? 
+                                    <span className="font-semibold text-gray-800 dark:text-gray-200">{currencySymbol}{project.pricePerVessel.toLocaleString()}</span>
+                                    : <span className="font-semibold text-gray-500 dark:text-gray-400 italic">To be estimated</span>
+                                }
                             </div>
                              {showGrossMargin && (
                                 <div className="flex justify-between pt-2 border-t dark:border-gray-700">

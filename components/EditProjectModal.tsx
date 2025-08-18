@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Company, Contact, Project, Product, TeamMember } from '../types';
-import { ProjectStage, ProductType, CompanyType, Currency } from '../types';
+import { ProjectStage, ProductType, CompanyType, Currency, VesselSizeUnit, FuelType } from '../types';
 import { Modal } from './Modal';
 import { PlusIcon, TrashIcon } from './icons';
 
@@ -37,7 +37,9 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
     const [products, setProducts] = useState<Product[]>([]);
     const [numberOfVessels, setNumberOfVessels] = useState(1);
     const [pumpsPerVessel, setPumpsPerVessel] = useState(1);
-    const [pricePerVessel, setPricePerVessel] = useState(0);
+    const [vesselSize, setVesselSize] = useState<number | ''>('');
+    const [vesselSizeUnit, setVesselSizeUnit] = useState<VesselSizeUnit>(VesselSizeUnit.DWT);
+    const [fuelType, setFuelType] = useState<FuelType>(FuelType.METHANOL);
 
     useEffect(() => {
         if (project) {
@@ -58,12 +60,11 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
             setProducts(project.products);
             setNumberOfVessels(project.numberOfVessels);
             setPumpsPerVessel(project.pumpsPerVessel);
-            setPricePerVessel(project.pricePerVessel);
+            setVesselSize(project.vesselSize ?? '');
+            setVesselSizeUnit(project.vesselSizeUnit ?? VesselSizeUnit.DWT);
+            setFuelType(project.fuelType);
         }
     }, [project]);
-
-
-    const totalProjectValue = useMemo(() => numberOfVessels * pricePerVessel, [numberOfVessels, pricePerVessel]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -81,11 +82,10 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
         }
 
         onUpdateProject({
-            ...project, // Keep the original ID
+            ...project, // Keep the original ID, price, value
             name: projectName,
             opportunityNumber,
             orderNumber: orderNumber || undefined,
-            value: totalProjectValue,
             currency,
             hedgeCurrency: hedgeCurrency || undefined,
             grossMarginPercent: typeof grossMarginPercent === 'number' ? grossMarginPercent : undefined,
@@ -100,7 +100,11 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
             notes,
             numberOfVessels,
             pumpsPerVessel,
-            pricePerVessel,
+            vesselSize: typeof vesselSize === 'number' ? vesselSize : undefined,
+            vesselSizeUnit: vesselSizeUnit || undefined,
+            fuelType,
+            // Recalculate value in case number of vessels changed
+            value: (project.pricePerVessel || 0) * numberOfVessels,
         });
     };
 
@@ -147,11 +151,22 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
                             <label htmlFor="pumpsPerVessel" className={labelClass}>Pumps per Vessel</label>
                             <input type="number" id="pumpsPerVessel" min="1" value={pumpsPerVessel} onChange={e => setPumpsPerVessel(Number(e.target.value))} className={inputClass} />
                         </div>
-                         <div>
-                            <label htmlFor="pricePerVessel" className={labelClass}>Price per Vessel</label>
-                            <input type="number" id="pricePerVessel" min="0" value={pricePerVessel} onChange={e => setPricePerVessel(Number(e.target.value))} className={inputClass} />
-                        </div>
                         <div>
+                            <label htmlFor="fuelType" className={labelClass}>Fuel Type</label>
+                             <select id="fuelType" value={fuelType} onChange={e => setFuelType(e.target.value as FuelType)} className={inputClass}>
+                                {Object.values(FuelType).map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                        </div>
+                         <div>
+                            <label htmlFor="vesselSize" className={labelClass}>Vessel Size</label>
+                            <div className="flex space-x-2">
+                                <input type="number" id="vesselSize" min="0" value={vesselSize} onChange={e => setVesselSize(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                                <select value={vesselSizeUnit} onChange={e => setVesselSizeUnit(e.target.value as VesselSizeUnit)} className={inputClass}>
+                                    {Object.values(VesselSizeUnit).map(u => <option key={u} value={u}>{u}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                         <div>
                             <label htmlFor="currency" className={labelClass}>Currency</label>
                             <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className={inputClass}>
                                 {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
@@ -160,7 +175,11 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
                     </div>
                     <div className="mt-3 text-right">
                         <span className={labelClass}>Total Project Value</span>
-                        <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{totalProjectValue.toLocaleString()} {currency}</p>
+                         {project.pricePerVessel ? (
+                            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{(numberOfVessels * project.pricePerVessel).toLocaleString()} {currency}</p>
+                         ) : (
+                            <p className="text-lg font-bold text-gray-500 dark:text-gray-400 italic">To be estimated</p>
+                         )}
                     </div>
                 </div>
 

@@ -15,7 +15,8 @@ interface ProjectPipelineViewProps {
     selectedProject: Project | null;
     onUploadFiles: (projectId: string, files: FileList) => void;
     onDeleteFile: (projectId: string, fileId: string) => void;
-    onOpenHPUCalculator: () => void;
+    onOpenHPUSizing: () => void;
+    onOpenEstimateCalculator: () => void;
 }
 
 export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
@@ -30,7 +31,8 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
     selectedProject,
     onUploadFiles,
     onDeleteFile,
-    onOpenHPUCalculator,
+    onOpenHPUSizing,
+    onOpenEstimateCalculator,
 }) => {
     return (
         <div className="flex flex-1 overflow-hidden h-full">
@@ -51,7 +53,8 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
                         onEditProject={() => onEditProject(selectedProject)}
                         onUploadFiles={onUploadFiles}
                         onDeleteFile={onDeleteFile}
-                        onOpenHPUCalculator={onOpenHPUCalculator}
+                        onOpenHPUSizing={onOpenHPUSizing}
+                        onOpenEstimateCalculator={onOpenEstimateCalculator}
                     />
                 ) : (
                     <div className="flex items-center justify-center h-full">
