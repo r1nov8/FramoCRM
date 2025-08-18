@@ -1,6 +1,8 @@
 // NOTE: This data is extracted from the provided PDF pricelist document.
 // All prices are in NOK unless otherwise specified.
 
+export type PumpVariant = 'CS' | 'CST' | 'CSTV';
+
 export interface PriceEntry {
   length: number;
   CS?: number;

@@ -3,9 +3,7 @@ import { Modal } from './Modal';
 import type { Project, Company, TeamMember } from '../types';
 import { Currency } from '../types';
 import { PRICING_DATA } from '../data/pricingData';
-import type { PriceEntry, Accessory, PumpPriceData } from '../data/pricingData';
-
-type PumpVariant = keyof Omit<PriceEntry, 'length'>;
+import type { PriceEntry, Accessory, PumpPriceData, PumpVariant } from '../data/pricingData';
 
 interface LineItem {
     id: string;
@@ -44,7 +42,7 @@ const getInitialLineItems = (): LineItem[] => {
 
     const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[initialPumpType];
     const priceEntry = pumpData.prices.find(p => p.length === initialPumpLength);
-    const initialUnitPrice = priceEntry && initialPumpVariant in priceEntry ? (priceEntry[initialPumpVariant] as number) : 0;
+    const initialUnitPrice = priceEntry && Object.prototype.hasOwnProperty.call(priceEntry, initialPumpVariant) ? (priceEntry[initialPumpVariant] ?? 0) : 0;
 
     return [
         { id: '1', description: 'Pump Type', isPump: true, pumpType: initialPumpType, pumpVariant: initialPumpVariant, pumpLength: initialPumpLength, qty: initialQty, unitPrice: initialUnitPrice },
@@ -116,8 +114,9 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                         const defaultLength = newPumpData.prices[0].length;
                         pumpItem.pumpLength = defaultLength;
                         const defaultPriceEntry = newPumpData.prices[0];
-                        if (!pumpItem.pumpVariant || !(pumpItem.pumpVariant in defaultPriceEntry)) {
-                             pumpItem.pumpVariant = Object.keys(defaultPriceEntry).find(k => k !== 'length') as PumpVariant;
+                        const availableVariants = Object.keys(defaultPriceEntry).filter(k => k !== 'length') as PumpVariant[];
+                        if (!pumpItem.pumpVariant || !availableVariants.includes(pumpItem.pumpVariant)) {
+                             pumpItem.pumpVariant = availableVariants.length > 0 ? availableVariants[0] : undefined;
                         }
                     }
                      // Reset dependent items
@@ -142,8 +141,8 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                 if (pumpData) {
                     const priceEntry = pumpData.prices.find(p => p.length === pumpItem.pumpLength);
                     const variantKey = pumpItem.pumpVariant;
-                    if (priceEntry && variantKey && variantKey in priceEntry) {
-                        const price = (priceEntry as any)[variantKey];
+                    if (priceEntry && variantKey && Object.prototype.hasOwnProperty.call(priceEntry, variantKey)) {
+                        const price = priceEntry[variantKey];
                         pumpItem.unitPrice = typeof price === 'number' ? price : 0;
                     } else {
                         pumpItem.unitPrice = 0;

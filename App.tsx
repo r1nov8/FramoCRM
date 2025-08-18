@@ -10,19 +10,33 @@ import { AddContactModal } from './components/AddContactModal';
 import { ManageTeamModal } from './components/ManageTeamModal';
 import { HPUSizingModal } from './components/HPUSizingModal';
 import { EstimateCalculatorModal } from './components/EstimateCalculatorModal';
-import type { Project, Company, Contact, TeamMember, ProjectFile, Currency } from './types';
+import type { Project, Company, Contact, Currency } from './types';
 import { CompanyType } from './types';
-import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS, INITIAL_TEAM_MEMBERS } from './constants';
+import { useData } from './context/DataContext';
 
 type View = 'dashboard' | 'pipeline';
 
 const App: React.FC = () => {
-    const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-    const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
-    const [contacts, setContacts] = useState<Contact[]>(INITIAL_CONTACTS);
-    const [teamMembers, setTeamMembers] = useState<TeamMember[]>(INITIAL_TEAM_MEMBERS);
-    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projects[0]?.id || null);
-    
+    // All data and data handlers are now pulled from context
+    const {
+        projects,
+        companies,
+        contacts,
+        teamMembers,
+        selectedProjectId,
+        setSelectedProjectId,
+        handleAddProject,
+        handleUpdateProject,
+        handleAddCompany,
+        handleAddContact,
+        handleAddTeamMember,
+        handleDeleteTeamMember,
+        handleUploadFiles,
+        handleDeleteFile,
+        handleUpdateProjectPrice
+    } = useData();
+
+    // UI state for modals and views remains in the App component
     const [isAddProjectModalOpen, setIsAddProjectModalOpen] = useState(false);
     const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
     const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
@@ -38,29 +52,32 @@ const App: React.FC = () => {
     const selectedProject = useMemo(() => {
         return projects.find(project => project.id === selectedProjectId) || null;
     }, [projects, selectedProjectId]);
-
-    const handleAddProject = (newProject: Omit<Project, 'id'>) => {
-        const projectWithId: Project = {
-            ...newProject,
-            id: `proj-${Date.now()}`,
-            files: [],
-        };
-        setProjects(prevProjects => [projectWithId, ...prevProjects]);
+    
+    // Wrapper functions to also handle modal closing
+    const handleAddProjectAndCloseModal = (newProject: Omit<Project, 'id'>) => {
+        handleAddProject(newProject);
         setIsAddProjectModalOpen(false);
-        setSelectedProjectId(projectWithId.id);
     };
 
+    const handleUpdateProjectAndCloseModal = (updatedProject: Project) => {
+        handleUpdateProject(updatedProject);
+        setIsEditProjectModalOpen(false);
+        setProjectToEdit(null);
+    };
+    
+    const handleAddCompanyAndCloseModal = (newCompany: Omit<Company, 'id'>) => {
+        handleAddCompany(newCompany);
+        setIsAddCompanyModalOpen(false);
+    };
+
+    const handleAddContactAndCloseModal = (newContact: Omit<Contact, 'id'>) => {
+        handleAddContact(newContact);
+        setIsAddContactModalOpen(false);
+    };
+    
     const handleOpenEditModal = (project: Project) => {
         setProjectToEdit(project);
         setIsEditProjectModalOpen(true);
-    };
-
-    const handleUpdateProject = (updatedProject: Project) => {
-        setProjects(prevProjects =>
-            prevProjects.map(p => (p.id === updatedProject.id ? updatedProject : p))
-        );
-        setIsEditProjectModalOpen(false);
-        setProjectToEdit(null);
     };
     
     const handleOpenAddCompanyModal = (type: CompanyType) => {
@@ -68,103 +85,9 @@ const App: React.FC = () => {
         setIsAddCompanyModalOpen(true);
     };
 
-    const handleAddCompany = (newCompany: Omit<Company, 'id'>) => {
-        const companyWithId: Company = {
-            ...newCompany,
-            id: `comp-${Date.now()}`
-        };
-        setCompanies(prev => [...prev, companyWithId]);
-        setIsAddCompanyModalOpen(false);
-    };
-
-    const handleAddContact = (newContact: Omit<Contact, 'id'>) => {
-        const contactWithId: Contact = {
-            ...newContact,
-            id: `cont-${Date.now()}`
-        };
-        setContacts(prev => [...prev, contactWithId]);
-        setIsAddContactModalOpen(false);
-    };
-
-    const handleAddTeamMember = (newMember: Omit<TeamMember, 'id'>) => {
-        const memberWithId: TeamMember = {
-            ...newMember,
-            id: `team-${Date.now()}`
-        };
-        setTeamMembers(prev => [...prev, memberWithId]);
-    };
-
-    const handleDeleteTeamMember = (memberId: string) => {
-        // Unassign projects from the deleted member
-        setProjects(prevProjects =>
-            prevProjects.map(p => {
-                if (p.salesRepId === memberId) {
-                    return { ...p, salesRepId: undefined };
-                }
-                return p;
-            })
-        );
-        // Remove the team member
-        setTeamMembers(prev => prev.filter(m => m.id !== memberId));
-    };
-
-    const handleUploadFiles = (projectId: string, files: FileList) => {
-        const filePromises = Array.from(files).map(file => {
-            return new Promise<ProjectFile>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const projectFile: ProjectFile = {
-                        id: `file-${Date.now()}-${Math.random()}`,
-                        name: file.name,
-                        type: file.type,
-                        size: file.size,
-                        content: (event.target?.result as string).split(',')[1], // Get base64 content
-                    };
-                    resolve(projectFile);
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        });
-
-        Promise.all(filePromises).then(newFiles => {
-            setProjects(prevProjects =>
-                prevProjects.map(p => {
-                    if (p.id === projectId) {
-                        return { ...p, files: [...p.files, ...newFiles] };
-                    }
-                    return p;
-                })
-            );
-        });
-    };
-
-    const handleDeleteFile = (projectId: string, fileId: string) => {
-        setProjects(prevProjects =>
-            prevProjects.map(p => {
-                if (p.id === projectId) {
-                    return { ...p, files: p.files.filter(f => f.id !== fileId) };
-                }
-                return p;
-            })
-        );
-    };
-
-    const handleUpdateProjectPrice = (price: number, currency: Currency) => {
+    const handleUpdateProjectPriceAndCloseModal = (price: number, currency: Currency) => {
         if (selectedProjectId) {
-            setProjects(prevProjects =>
-                prevProjects.map(p => {
-                    if (p.id === selectedProjectId) {
-                        return {
-                            ...p,
-                            pricePerVessel: price,
-                            currency: currency,
-                            value: p.numberOfVessels * price,
-                        };
-                    }
-                    return p;
-                })
-            );
+            handleUpdateProjectPrice(selectedProjectId, price, currency);
             setIsEstimateCalculatorOpen(false);
         }
     };
@@ -208,7 +131,7 @@ const App: React.FC = () => {
             {isAddProjectModalOpen && (
                 <AddProjectModal
                     onClose={() => setIsAddProjectModalOpen(false)}
-                    onAddProject={handleAddProject}
+                    onAddProject={handleAddProjectAndCloseModal}
                     companies={companies}
                     contacts={contacts}
                     teamMembers={teamMembers}
@@ -223,7 +146,7 @@ const App: React.FC = () => {
                         setIsEditProjectModalOpen(false);
                         setProjectToEdit(null);
                     }}
-                    onUpdateProject={handleUpdateProject}
+                    onUpdateProject={handleUpdateProjectAndCloseModal}
                     companies={companies}
                     contacts={contacts}
                     teamMembers={teamMembers}
@@ -234,14 +157,14 @@ const App: React.FC = () => {
             {isAddCompanyModalOpen && (
                 <AddCompanyModal
                     onClose={() => setIsAddCompanyModalOpen(false)}
-                    onAddCompany={handleAddCompany}
+                    onAddCompany={handleAddCompanyAndCloseModal}
                     initialType={companyTypeForModal}
                 />
             )}
             {isAddContactModalOpen && (
                 <AddContactModal
                     onClose={() => setIsAddContactModalOpen(false)}
-                    onAddContact={handleAddContact}
+                    onAddContact={handleAddContactAndCloseModal}
                     companies={companies}
                 />
             )}
@@ -264,7 +187,7 @@ const App: React.FC = () => {
                     companies={companies}
                     teamMembers={teamMembers}
                     onClose={() => setIsEstimateCalculatorOpen(false)}
-                    onUpdateProjectPrice={handleUpdateProjectPrice}
+                    onUpdateProjectPrice={handleUpdateProjectPriceAndCloseModal}
                 />
             )}
         </div>
