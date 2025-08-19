@@ -12,7 +12,10 @@ const app = express();
 const port = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
 
-app.use(cors());
+app.use(cors({
+  origin: 'https://framocrm-1.onrender.com',
+  credentials: true
+}));
 app.use(express.json());
 
 const pool = new Pool({
