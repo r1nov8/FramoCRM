@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AuthForm } from './components/AuthForm';
 import { Header } from './components/Header';
-import { ExitDoorIcon } from './components/icons';
+import { ExitDoorIcon, UsersIcon } from './components/icons';
 import { IconSidebar } from './components/IconSidebar';
 import { Dashboard } from './components/Dashboard';
 import { ProjectPipelineView } from './components/ProjectPipelineView';
