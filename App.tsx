@@ -102,9 +102,18 @@ const App: React.FC = () => {
                 <div className="flex items-center justify-between">
                     <Header
                         title={pageTitle}
-                        onManageTeamClick={() => setIsManageTeamModalOpen(true)}
                         rightContent={
                             <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={() => setIsManageTeamModalOpen(true)}
+                                    className="flex items-center space-x-2 p-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
+                                    aria-label="Manage team"
+                                >
+                                    <UsersIcon className="w-5 h-5" />
+                                </button>
+                                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                                    ST
+                                </div>
                                 <button
                                     onClick={handleLogout}
                                     className="p-2 rounded-md bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-800"
