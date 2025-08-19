@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 // Helper to get API URL from env or fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 import type { Project, Company, Contact, TeamMember, ProjectFile, Currency } from '../types';
+import { CompanyType } from '../types';
 import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS } from '../constants';
 
 const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
@@ -95,10 +96,21 @@ export const useCrmData = () => {
 
     const handleAddCompany = async (newCompany: Omit<Company, 'id'>) => {
         try {
+            // Normalize type to enum value
+            let normalizedType = newCompany.type;
+            if (Object.values(CompanyType).includes(newCompany.type as CompanyType)) {
+                normalizedType = newCompany.type;
+            } else {
+                // Try to match ignoring case/whitespace
+                const found = Object.values(CompanyType).find(
+                    t => t.toLowerCase().replace(/\s+/g, '') === newCompany.type.toLowerCase().replace(/\s+/g, '')
+                );
+                if (found) normalizedType = found;
+            }
             const res = await fetch(`${API_URL}/api/companies`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newCompany)
+                body: JSON.stringify({ ...newCompany, type: normalizedType })
             });
             if (!res.ok) throw new Error('Failed to add company');
             const created = await res.json();
