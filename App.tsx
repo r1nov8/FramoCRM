@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { AuthForm } from './components/AuthForm';
 import { Header } from './components/Header';
 import { IconSidebar } from './components/IconSidebar';
 import { Dashboard } from './components/Dashboard';
@@ -17,6 +18,16 @@ import { useData } from './context/DataContext';
 type View = 'dashboard' | 'pipeline';
 
 const App: React.FC = () => {
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+    const handleAuthSuccess = (jwt: string) => {
+        setToken(jwt);
+        localStorage.setItem('token', jwt);
+    };
+
+    if (!token) {
+        return <AuthForm onAuthSuccess={handleAuthSuccess} />;
+    }
+
     // All data and data handlers are now pulled from context
     const {
         projects,
@@ -45,15 +56,11 @@ const App: React.FC = () => {
     const [isManageTeamModalOpen, setIsManageTeamModalOpen] = useState(false);
     const [isHPUSizingModalOpen, setIsHPUSizingModalOpen] = useState(false);
     const [isEstimateCalculatorOpen, setIsEstimateCalculatorOpen] = useState(false);
-    
-    const [companyTypeForModal, setCompanyTypeForModal] = useState<CompanyType | undefined>(undefined);
-    const [activeView, setActiveView] = useState<View>('dashboard');
+    const [activeView, setActiveView] = useState<View>('pipeline');
+    const [companyTypeForModal, setCompanyTypeForModal] = useState<CompanyType | null>(null);
 
-    const selectedProject = useMemo(() => {
-        return projects.find(project => project.id === selectedProjectId) || null;
-    }, [projects, selectedProjectId]);
-    
-    // Wrapper functions to also handle modal closing
+    const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
+
     const handleAddProjectAndCloseModal = (newProject: Omit<Project, 'id'>) => {
         handleAddProject(newProject);
         setIsAddProjectModalOpen(false);
@@ -62,9 +69,8 @@ const App: React.FC = () => {
     const handleUpdateProjectAndCloseModal = (updatedProject: Project) => {
         handleUpdateProject(updatedProject);
         setIsEditProjectModalOpen(false);
-        setProjectToEdit(null);
     };
-    
+
     const handleAddCompanyAndCloseModal = (newCompany: Omit<Company, 'id'>) => {
         handleAddCompany(newCompany);
         setIsAddCompanyModalOpen(false);
@@ -74,12 +80,12 @@ const App: React.FC = () => {
         handleAddContact(newContact);
         setIsAddContactModalOpen(false);
     };
-    
+
     const handleOpenEditModal = (project: Project) => {
         setProjectToEdit(project);
         setIsEditProjectModalOpen(true);
     };
-    
+
     const handleOpenAddCompanyModal = (type: CompanyType) => {
         setCompanyTypeForModal(type);
         setIsAddCompanyModalOpen(true);
@@ -130,68 +136,45 @@ const App: React.FC = () => {
 
             {isAddProjectModalOpen && (
                 <AddProjectModal
-                    onClose={() => setIsAddProjectModalOpen(false)}
                     onAddProject={handleAddProjectAndCloseModal}
-                    companies={companies}
-                    contacts={contacts}
-                    teamMembers={teamMembers}
-                    onAddCompanyClick={handleOpenAddCompanyModal}
-                    onAddContactClick={() => setIsAddContactModalOpen(true)}
+                    onClose={() => setIsAddProjectModalOpen(false)}
                 />
             )}
             {isEditProjectModalOpen && projectToEdit && (
                 <EditProjectModal
                     project={projectToEdit}
-                    onClose={() => {
-                        setIsEditProjectModalOpen(false);
-                        setProjectToEdit(null);
-                    }}
                     onUpdateProject={handleUpdateProjectAndCloseModal}
-                    companies={companies}
-                    contacts={contacts}
-                    teamMembers={teamMembers}
-                    onAddCompanyClick={handleOpenAddCompanyModal}
-                    onAddContactClick={() => setIsAddContactModalOpen(true)}
+                    onClose={() => setIsEditProjectModalOpen(false)}
                 />
             )}
             {isAddCompanyModalOpen && (
                 <AddCompanyModal
-                    onClose={() => setIsAddCompanyModalOpen(false)}
+                    type={companyTypeForModal}
                     onAddCompany={handleAddCompanyAndCloseModal}
-                    initialType={companyTypeForModal}
+                    onClose={() => setIsAddCompanyModalOpen(false)}
                 />
             )}
             {isAddContactModalOpen && (
                 <AddContactModal
-                    onClose={() => setIsAddContactModalOpen(false)}
                     onAddContact={handleAddContactAndCloseModal}
-                    companies={companies}
+                    onClose={() => setIsAddContactModalOpen(false)}
                 />
             )}
             {isManageTeamModalOpen && (
-                <ManageTeamModal
-                    onClose={() => setIsManageTeamModalOpen(false)}
-                    teamMembers={teamMembers}
-                    onAddTeamMember={handleAddTeamMember}
-                    onDeleteTeamMember={handleDeleteTeamMember}
-                />
+                <ManageTeamModal onClose={() => setIsManageTeamModalOpen(false)} />
             )}
             {isHPUSizingModalOpen && (
-                <HPUSizingModal
-                    onClose={() => setIsHPUSizingModalOpen(false)}
-                />
+                <HPUSizingModal onClose={() => setIsHPUSizingModalOpen(false)} />
             )}
-            {isEstimateCalculatorOpen && selectedProject && (
+            {isEstimateCalculatorOpen && (
                 <EstimateCalculatorModal
-                    project={selectedProject}
-                    companies={companies}
-                    teamMembers={teamMembers}
-                    onClose={() => setIsEstimateCalculatorOpen(false)}
                     onUpdateProjectPrice={handleUpdateProjectPriceAndCloseModal}
+                    onClose={() => setIsEstimateCalculatorOpen(false)}
                 />
             )}
         </div>
+
     );
-};
+}
 
 export default App;
