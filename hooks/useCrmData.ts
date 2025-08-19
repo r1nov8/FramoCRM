@@ -212,15 +212,20 @@ export const useCrmData = () => {
 
     const handleAddContact = async (newContact: Omit<Contact, 'id'>) => {
         try {
-            // Normalize companyId to integer if possible
-            let companyId = newContact.companyId;
-            if (companyId && typeof companyId === 'string' && !isNaN(Number(companyId))) {
-                companyId = Number(companyId);
+            // Normalize companyId to integer if possible and map to company_id for backend
+            let company_id = newContact.companyId;
+            if (company_id && typeof company_id === 'string' && !isNaN(Number(company_id))) {
+                company_id = Number(company_id);
             }
             const res = await fetch(`${API_URL}/api/contacts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...newContact, companyId })
+                body: JSON.stringify({
+                    name: newContact.name,
+                    email: newContact.email,
+                    phone: newContact.phone,
+                    company_id
+                })
             });
             if (!res.ok) throw new Error('Failed to add contact');
             const created = await res.json();
