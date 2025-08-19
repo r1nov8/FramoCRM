@@ -7,7 +7,12 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+.yarn/
+.pnp.*
+yarn.lock
+.yarnrc.yml
 node_modules
+pnpm-lock.yaml
 dist
 dist-ssr
 *.local

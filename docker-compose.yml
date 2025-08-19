@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: crmuser
+      POSTGRES_PASSWORD: crmpassword
+      POSTGRES_DB: crmdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://crmuser:crmpassword@db:5432/crmdb
+    ports:
+      - "4000:4000"
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    entrypoint: /bin/bash /app/entrypoint.sh
+
+  frontend:
+    platform: linux/amd64
+    build: .
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:4000
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: ["npm", "run", "dev"]
+
+volumes:
+  db_data:
