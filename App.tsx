@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AuthForm } from './components/AuthForm';
 import { Header } from './components/Header';
+import { ExitDoorIcon } from './components/icons';
 import { IconSidebar } from './components/IconSidebar';
 import { Dashboard } from './components/Dashboard';
 import { ProjectPipelineView } from './components/ProjectPipelineView';
@@ -82,28 +83,6 @@ const App: React.FC = () => {
         setIsAddCompanyModalOpen(false);
     };
 
-    const handleAddContactAndCloseModal = (newContact: Omit<Contact, 'id'>) => {
-        handleAddContact(newContact);
-        setIsAddContactModalOpen(false);
-    };
-
-    const handleOpenEditModal = (project: Project) => {
-        setProjectToEdit(project);
-        setIsEditProjectModalOpen(true);
-    };
-
-    const handleOpenAddCompanyModal = (type: CompanyType) => {
-        setCompanyTypeForModal(type);
-        setIsAddCompanyModalOpen(true);
-    };
-
-    const handleUpdateProjectPriceAndCloseModal = (price: number, currency: Currency) => {
-        if (selectedProjectId) {
-            handleUpdateProjectPrice(selectedProjectId, price, currency);
-            setIsEstimateCalculatorOpen(false);
-        }
-    };
-
     const pageTitle = useMemo(() => {
         if (activeView === 'pipeline') return 'Project Pipeline';
         return 'Dashboard';
@@ -114,13 +93,21 @@ const App: React.FC = () => {
             <IconSidebar activeView={activeView} onNavigate={setActiveView} />
             <div className="flex flex-col flex-1 overflow-hidden">
                 <div className="flex items-center justify-between">
-                    <Header title={pageTitle} onManageTeamClick={() => setIsManageTeamModalOpen(true)} />
-                    <button
-                        onClick={handleLogout}
-                        className="m-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                    >
-                        Logout
-                    </button>
+                    <Header
+                        title={pageTitle}
+                        onManageTeamClick={() => setIsManageTeamModalOpen(true)}
+                        rightContent={
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={handleLogout}
+                                    className="p-2 rounded-md bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-800"
+                                    title="Logout"
+                                >
+                                    <ExitDoorIcon className="w-6 h-6" />
+                                </button>
+                            </div>
+                        }
+                    />
                 </div>
                 {activeView === 'dashboard' && (
                     <main className="flex-1 overflow-y-auto p-6">
