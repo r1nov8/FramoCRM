@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 // Helper to get API URL from env or fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 import type { Project, Company, Contact, TeamMember, ProjectFile, Currency } from '../types';
-import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS, INITIAL_TEAM_MEMBERS } from '../constants';
+import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS } from '../constants';
 
 const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     try {
@@ -27,7 +27,7 @@ export const useCrmData = () => {
     const [projects, setProjects] = useState<Project[]>(() => loadFromLocalStorage('crm_projects', INITIAL_PROJECTS));
     const [companies, setCompanies] = useState<Company[]>(() => loadFromLocalStorage('crm_companies', INITIAL_COMPANIES));
     const [contacts, setContacts] = useState<Contact[]>(() => loadFromLocalStorage('crm_contacts', INITIAL_CONTACTS));
-    const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => loadFromLocalStorage('crm_team_members', INITIAL_TEAM_MEMBERS));
+    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
         const loadedProjects = loadFromLocalStorage('crm_projects', INITIAL_PROJECTS);
         return loadedProjects[0]?.id || null;
@@ -36,7 +36,17 @@ export const useCrmData = () => {
     useEffect(() => saveToLocalStorage('crm_projects', projects), [projects]);
     useEffect(() => saveToLocalStorage('crm_companies', companies), [companies]);
     useEffect(() => saveToLocalStorage('crm_contacts', contacts), [contacts]);
-    useEffect(() => saveToLocalStorage('crm_team_members', teamMembers), [teamMembers]);
+
+    // Fetch team members from backend
+    useEffect(() => {
+        fetch(`${API_URL}/api/team-members`)
+            .then(res => res.json())
+            .then(data => setTeamMembers(data))
+            .catch(err => {
+                console.error('Failed to fetch team members:', err);
+                setTeamMembers([]);
+            });
+    }, []);
 
     // Ensure selectedProjectId is valid if projects change
     useEffect(() => {
@@ -78,19 +88,38 @@ export const useCrmData = () => {
         setContacts(prev => [...prev, contactWithId]);
     };
 
-    const handleAddTeamMember = (newMember: Omit<TeamMember, 'id'>) => {
-        const memberWithId: TeamMember = {
-            ...newMember,
-            id: `team-${Date.now()}`
-        };
-        setTeamMembers(prev => [...prev, memberWithId]);
+
+    const handleAddTeamMember = async (newMember: Omit<TeamMember, 'id'>) => {
+        try {
+            const res = await fetch(`${API_URL}/api/team-members`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: newMember.name,
+                    initials: newMember.initials,
+                    jobTitle: newMember.jobTitle
+                })
+            });
+            if (!res.ok) throw new Error('Failed to add team member');
+            const created = await res.json();
+            setTeamMembers(prev => [created, ...prev]);
+        } catch (err) {
+            console.error('Add team member error:', err);
+        }
     };
 
-    const handleDeleteTeamMember = (memberId: string) => {
-        setProjects(prevProjects =>
-            prevProjects.map(p => p.salesRepId === memberId ? { ...p, salesRepId: undefined } : p)
-        );
-        setTeamMembers(prev => prev.filter(m => m.id !== memberId));
+
+    const handleDeleteTeamMember = async (memberId: string) => {
+        try {
+            const res = await fetch(`${API_URL}/api/team-members/${memberId}`, { method: 'DELETE' });
+            if (!res.ok && res.status !== 204) throw new Error('Failed to delete team member');
+            setProjects(prevProjects =>
+                prevProjects.map(p => p.salesRepId === memberId ? { ...p, salesRepId: undefined } : p)
+            );
+            setTeamMembers(prev => prev.filter(m => m.id !== memberId));
+        } catch (err) {
+            console.error('Delete team member error:', err);
+        }
     };
 
     const handleUploadFiles = (projectId: string, files: FileList) => {

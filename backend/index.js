@@ -90,7 +90,64 @@ app.post('/api/projects', async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-// --- Add similar endpoints for companies, contacts, teamMembers as needed ---
+
+// --- Team Members CRUD Endpoints ---
+// Get all team members
+app.get('/api/team-members', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM team_members ORDER BY id DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error('Get team members error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Add a team member
+app.post('/api/team-members', async (req, res) => {
+  try {
+    const { name, initials, jobTitle } = req.body;
+    if (!name || !initials || !jobTitle) return res.status(400).json({ error: 'Missing fields' });
+    const { rows } = await pool.query(
+      'INSERT INTO team_members (name, initials, job_title) VALUES ($1, $2, $3) RETURNING *',
+      [name, initials, jobTitle]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('Add team member error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete a team member
+app.delete('/api/team-members/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM team_members WHERE id = $1', [id]);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Delete team member error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update a team member
+app.put('/api/team-members/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, initials, jobTitle } = req.body;
+    if (!name || !initials || !jobTitle) return res.status(400).json({ error: 'Missing fields' });
+    const { rows } = await pool.query(
+      'UPDATE team_members SET name = $1, initials = $2, job_title = $3 WHERE id = $4 RETURNING *',
+      [name, initials, jobTitle, id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Update team member error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 app.listen(port, () => {
   console.log(`CRM backend listening on port ${port}`);
