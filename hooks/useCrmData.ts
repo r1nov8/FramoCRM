@@ -264,36 +264,6 @@ export const useCrmData = () => {
         }
     };
 
-    const handleUploadFiles = (projectId: string, files: FileList) => {
-        const filePromises = Array.from(files).map(file => {
-            return new Promise<ProjectFile>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const projectFile: ProjectFile = {
-                        id: `file-${Date.now()}-${Math.random()}`,
-                        name: file.name,
-                        type: file.type,
-                        size: file.size,
-                        content: (event.target?.result as string).split(',')[1],
-                    };
-                    resolve(projectFile);
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        });
-
-        Promise.all(filePromises).then(newFiles => {
-            setProjects(prevProjects =>
-                prevProjects.map(p => {
-                    if (p.id === projectId) {
-                        return { ...p, files: [...(p.files || []), ...newFiles] };
-                    }
-                    return p;
-                })
-            );
-        });
-    };
 
     const handleDeleteFile = (projectId: string, fileId: string) => {
         setProjects(prevProjects =>
