@@ -32,6 +32,7 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
     const [shipyardId, setShipyardId] = useState('');
     const [vesselOwnerId, setVesselOwnerId] = useState('');
     const [designCompanyId, setDesignCompanyId] = useState('');
+    // Always store as string for select value
     const [primaryContactId, setPrimaryContactId] = useState('');
     const [notes, setNotes] = useState('');
     const [products, setProducts] = useState<Product[]>([]);
@@ -55,7 +56,16 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
             setShipyardId(project.shipyardId);
             setVesselOwnerId(project.vesselOwnerId || '');
             setDesignCompanyId(project.designCompanyId || '');
-            setPrimaryContactId(project.primaryContactId);
+            setPrimaryContactId(project.primaryContactId ? String(project.primaryContactId) : '');
+    // When contacts change, if a new contact was added, select it automatically
+    useEffect(() => {
+        if (contacts.length > 0) {
+            // If current primaryContactId is not in contacts, select the newest
+            if (!contacts.find(c => String(c.id) === primaryContactId)) {
+                setPrimaryContactId(String(contacts[0].id));
+            }
+        }
+    }, [contacts]);
             setNotes(project.notes);
             setProducts(project.products);
             setNumberOfVessels(project.numberOfVessels);
