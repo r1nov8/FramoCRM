@@ -103,6 +103,202 @@ app.get('/api/team-members', async (req, res) => {
   }
 });
 
+// --- Companies CRUD Endpoints ---
+app.get('/api/companies', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM companies ORDER BY id DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error('Get companies error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/companies', async (req, res) => {
+  try {
+    const { name, type, location } = req.body;
+    if (!name || !type) return res.status(400).json({ error: 'Missing fields' });
+    const { rows } = await pool.query(
+      'INSERT INTO companies (name, type, location) VALUES ($1, $2, $3) RETURNING *',
+      [name, type, location]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('Add company error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/companies/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, type, location } = req.body;
+    const { rows } = await pool.query(
+      'UPDATE companies SET name = $1, type = $2, location = $3 WHERE id = $4 RETURNING *',
+      [name, type, location, id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Update company error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/companies/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM companies WHERE id = $1', [id]);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Delete company error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Contacts CRUD Endpoints ---
+app.get('/api/contacts', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM contacts ORDER BY id DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error('Get contacts error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/contacts', async (req, res) => {
+  try {
+    const { name, email, phone, companyId } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'Missing fields' });
+    const { rows } = await pool.query(
+      'INSERT INTO contacts (name, email, phone, company_id) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, email, phone, companyId]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('Add contact error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/contacts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, companyId } = req.body;
+    const { rows } = await pool.query(
+      'UPDATE contacts SET name = $1, email = $2, phone = $3, company_id = $4 WHERE id = $5 RETURNING *',
+      [name, email, phone, companyId, id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Update contact error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/contacts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM contacts WHERE id = $1', [id]);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Delete contact error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Products CRUD Endpoints ---
+app.get('/api/products', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM products ORDER BY id DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error('Get products error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/products', async (req, res) => {
+  try {
+    const { projectId, type, quantity, capacity, head } = req.body;
+    if (!projectId || !type || !quantity) return res.status(400).json({ error: 'Missing fields' });
+    const { rows } = await pool.query(
+      'INSERT INTO products (project_id, type, quantity, capacity, head) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [projectId, type, quantity, capacity, head]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('Add product error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type, quantity, capacity, head } = req.body;
+    const { rows } = await pool.query(
+      'UPDATE products SET type = $1, quantity = $2, capacity = $3, head = $4 WHERE id = $5 RETURNING *',
+      [type, quantity, capacity, head, id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Update product error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM products WHERE id = $1', [id]);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Delete product error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Project Files CRUD Endpoints ---
+app.get('/api/project-files', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM project_files ORDER BY id DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error('Get project files error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/project-files', async (req, res) => {
+  try {
+    const { projectId, name, type, size, content } = req.body;
+    if (!projectId || !name) return res.status(400).json({ error: 'Missing fields' });
+    const { rows } = await pool.query(
+      'INSERT INTO project_files (project_id, name, type, size, content) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [projectId, name, type, size, content]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('Add project file error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/project-files/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM project_files WHERE id = $1', [id]);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Delete project file error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Add a team member
 app.post('/api/team-members', async (req, res) => {
   try {
