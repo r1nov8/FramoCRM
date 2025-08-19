@@ -1,3 +1,8 @@
+    // Add missing handler for AddContactModal
+    const handleAddContactAndCloseModal = (newContact: Omit<Contact, 'id'>) => {
+        handleAddContact(newContact);
+        setIsAddContactModalOpen(false);
+    };
 import React, { useState, useMemo } from 'react';
 import { AuthForm } from './components/AuthForm';
 import { Header } from './components/Header';
