@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+
+// Helper to get API URL from env or fallback
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 import type { Project, Company, Contact, TeamMember, ProjectFile, Currency } from '../types';
 import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS, INITIAL_TEAM_MEMBERS } from '../constants';
 
