@@ -77,20 +77,109 @@ export const useCrmData = () => {
     }, [projects, selectedProjectId]);
 
 
-    const handleAddProject = (newProject: Omit<Project, 'id'>) => {
-        const projectWithId: Project = {
-            ...newProject,
-            id: `proj-${Date.now()}`,
-            files: [],
+
+    // Normalize all related IDs to integers if possible
+    const normalizeProjectIds = (project: any) => {
+        const intOrNull = (v: any) => (v && !isNaN(Number(v)) ? Number(v) : null);
+        return {
+            ...project,
+            salesRepId: intOrNull(project.salesRepId),
+            shipyardId: intOrNull(project.shipyardId),
+            vesselOwnerId: intOrNull(project.vesselOwnerId),
+            designCompanyId: intOrNull(project.designCompanyId),
+            primaryContactId: intOrNull(project.primaryContactId),
         };
-        setProjects(prevProjects => [projectWithId, ...prevProjects]);
-        setSelectedProjectId(projectWithId.id);
     };
-    
-    const handleUpdateProject = (updatedProject: Project) => {
-        setProjects(prevProjects =>
-            prevProjects.map(p => (p.id === updatedProject.id ? updatedProject : p))
-        );
+
+    const handleAddProject = async (newProject: Omit<Project, 'id'>) => {
+        try {
+            const normalized = normalizeProjectIds(newProject);
+            const res = await fetch(`${API_URL}/api/projects`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(normalized)
+            });
+            if (!res.ok) throw new Error('Failed to add project');
+            const created = await res.json();
+            setProjects(prev => [created, ...prev]);
+            setSelectedProjectId(created.id);
+        } catch (err) {
+            console.error('Add project error:', err);
+        }
+    };
+
+    const handleUpdateProject = async (updatedProject: Project) => {
+        try {
+            const normalized = normalizeProjectIds(updatedProject);
+            const res = await fetch(`${API_URL}/api/projects/${updatedProject.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(normalized)
+            });
+            if (!res.ok) throw new Error('Failed to update project');
+            const updated = await res.json();
+            setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+        } catch (err) {
+            console.error('Update project error:', err);
+        }
+    };
+
+    // File upload and product upload should use backend as well (not just local)
+    const handleUploadFiles = async (projectId: string, files: FileList) => {
+        const filePromises = Array.from(files).map(file => {
+            return new Promise<ProjectFile>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const fileData = {
+                            projectId: Number(projectId),
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            content: (event.target?.result as string).split(',')[1],
+                        };
+                        const res = await fetch(`${API_URL}/api/project-files`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(fileData)
+                        });
+                        if (!res.ok) throw new Error('Failed to upload file');
+                        const created = await res.json();
+                        resolve(created);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        });
+
+        Promise.all(filePromises).then(newFiles => {
+            setProjects(prevProjects =>
+                prevProjects.map(p => {
+                    if (p.id === projectId) {
+                        return { ...p, files: [...(p.files || []), ...newFiles] };
+                    }
+                    return p;
+                })
+            );
+        });
+    };
+
+    // Add product to backend
+    const handleAddProduct = async (projectId: string, product: Omit<Product, 'id'>) => {
+        try {
+            const res = await fetch(`${API_URL}/api/products`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectId: Number(projectId), ...product })
+            });
+            if (!res.ok) throw new Error('Failed to add product');
+            // Optionally update local state if needed
+        } catch (err) {
+            console.error('Add product error:', err);
+        }
     };
     
 
@@ -123,10 +212,15 @@ export const useCrmData = () => {
 
     const handleAddContact = async (newContact: Omit<Contact, 'id'>) => {
         try {
+            // Normalize companyId to integer if possible
+            let companyId = newContact.companyId;
+            if (companyId && typeof companyId === 'string' && !isNaN(Number(companyId))) {
+                companyId = Number(companyId);
+            }
             const res = await fetch(`${API_URL}/api/contacts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newContact)
+                body: JSON.stringify({ ...newContact, companyId })
             });
             if (!res.ok) throw new Error('Failed to add contact');
             const created = await res.json();
