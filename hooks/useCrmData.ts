@@ -25,8 +25,8 @@ const saveToLocalStorage = <T,>(key: string, value: T) => {
 
 export const useCrmData = () => {
     const [projects, setProjects] = useState<Project[]>(() => loadFromLocalStorage('crm_projects', INITIAL_PROJECTS));
-    const [companies, setCompanies] = useState<Company[]>(() => loadFromLocalStorage('crm_companies', INITIAL_COMPANIES));
-    const [contacts, setContacts] = useState<Contact[]>(() => loadFromLocalStorage('crm_contacts', INITIAL_CONTACTS));
+    const [companies, setCompanies] = useState<Company[]>([]);
+    const [contacts, setContacts] = useState<Contact[]>([]);
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
         const loadedProjects = loadFromLocalStorage('crm_projects', INITIAL_PROJECTS);
@@ -34,8 +34,28 @@ export const useCrmData = () => {
     });
 
     useEffect(() => saveToLocalStorage('crm_projects', projects), [projects]);
-    useEffect(() => saveToLocalStorage('crm_companies', companies), [companies]);
-    useEffect(() => saveToLocalStorage('crm_contacts', contacts), [contacts]);
+
+    // Fetch companies from backend
+    useEffect(() => {
+        fetch(`${API_URL}/api/companies`)
+            .then(res => res.json())
+            .then(data => setCompanies(data))
+            .catch(err => {
+                console.error('Failed to fetch companies:', err);
+                setCompanies([]);
+            });
+    }, []);
+
+    // Fetch contacts from backend
+    useEffect(() => {
+        fetch(`${API_URL}/api/contacts`)
+            .then(res => res.json())
+            .then(data => setContacts(data))
+            .catch(err => {
+                console.error('Failed to fetch contacts:', err);
+                setContacts([]);
+            });
+    }, []);
 
     // Fetch team members from backend
     useEffect(() => {
@@ -72,20 +92,36 @@ export const useCrmData = () => {
         );
     };
     
-    const handleAddCompany = (newCompany: Omit<Company, 'id'>) => {
-        const companyWithId: Company = {
-            ...newCompany,
-            id: `comp-${Date.now()}`
-        };
-        setCompanies(prev => [...prev, companyWithId]);
+
+    const handleAddCompany = async (newCompany: Omit<Company, 'id'>) => {
+        try {
+            const res = await fetch(`${API_URL}/api/companies`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newCompany)
+            });
+            if (!res.ok) throw new Error('Failed to add company');
+            const created = await res.json();
+            setCompanies(prev => [created, ...prev]);
+        } catch (err) {
+            console.error('Add company error:', err);
+        }
     };
 
-    const handleAddContact = (newContact: Omit<Contact, 'id'>) => {
-        const contactWithId: Contact = {
-            ...newContact,
-            id: `cont-${Date.now()}`
-        };
-        setContacts(prev => [...prev, contactWithId]);
+
+    const handleAddContact = async (newContact: Omit<Contact, 'id'>) => {
+        try {
+            const res = await fetch(`${API_URL}/api/contacts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newContact)
+            });
+            if (!res.ok) throw new Error('Failed to add contact');
+            const created = await res.json();
+            setContacts(prev => [created, ...prev]);
+        } catch (err) {
+            console.error('Add contact error:', err);
+        }
     };
 
 
