@@ -249,7 +249,7 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
                         <div className="flex items-center space-x-2">
                             <select id="primaryContact" value={primaryContactId} onChange={e => setPrimaryContactId(e.target.value)} className={inputClass} required>
                                 <option value="">Select Contact</option>
-                                {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                {(Array.isArray(contacts) ? contacts : []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                              <button type="button" onClick={onAddContactClick} className={addButtonClass} aria-label="Add new contact">
                                 <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
