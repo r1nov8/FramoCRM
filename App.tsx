@@ -83,6 +83,13 @@ const App: React.FC = () => {
         setIsAddCompanyModalOpen(false);
     };
 
+
+    // Fix: Add missing handleOpenEditModal
+    const handleOpenEditModal = (project: Project) => {
+        setProjectToEdit(project);
+        setIsEditProjectModalOpen(true);
+    };
+
     const pageTitle = useMemo(() => {
         if (activeView === 'pipeline') return 'Project Pipeline';
         return 'Dashboard';
