@@ -166,7 +166,12 @@ const App: React.FC = () => {
                 />
             )}
             {isManageTeamModalOpen && (
-                <ManageTeamModal onClose={() => setIsManageTeamModalOpen(false)} />
+                <ManageTeamModal
+                    onClose={() => setIsManageTeamModalOpen(false)}
+                    teamMembers={teamMembers}
+                    onAddTeamMember={handleAddTeamMember}
+                    onDeleteTeamMember={handleDeleteTeamMember}
+                />
             )}
             {isHPUSizingModalOpen && (
                 <HPUSizingModal onClose={() => setIsHPUSizingModalOpen(false)} />
