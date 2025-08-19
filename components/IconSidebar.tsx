@@ -35,8 +35,8 @@ const NavItem: React.FC<{
 export const IconSidebar: React.FC<IconSidebarProps> = ({ activeView, onNavigate }) => {
     return (
         <nav className="flex flex-col items-center w-20 bg-gray-800 text-white shadow-lg z-20 flex-shrink-0">
-            <button onClick={() => onNavigate('dashboard')} className="flex items-center justify-center w-16 h-16 border-b-2 border-gray-700 hover:bg-gray-700/50 transition-colors duration-200 p-0 m-0">
-                <img src="/framo-logo.png" alt="Framo Logo" className="w-16 h-16 rounded-2xl object-cover p-0 m-0" />
+            <button onClick={() => onNavigate('dashboard')} className="flex items-center justify-center w-20 h-20 border-b-2 border-gray-700 hover:bg-gray-700/50 transition-colors duration-200 p-0 m-0">
+                <img src="/framo-logo.png" alt="Framo Logo" className="w-12 h-12 rounded-2xl object-cover" />
             </button>
             <div className="flex flex-col items-center w-full mt-4 space-y-2">
                 <NavItem
