@@ -242,7 +242,8 @@ export const useCrmData = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: newMember.name,
+                    first_name: newMember.first_name,
+                    last_name: newMember.last_name,
                     initials: newMember.initials,
                     jobTitle: newMember.jobTitle
                 })

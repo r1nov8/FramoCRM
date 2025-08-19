@@ -88,8 +88,9 @@ export interface Product {
 }
 
 export interface TeamMember {
-    id:string;
-    name: string;
+    id: string;
+    first_name: string;
+    last_name: string;
     initials: string;
     jobTitle: string;
 }

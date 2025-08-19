@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS project_files (
 -- Team members table
 CREATE TABLE IF NOT EXISTS team_members (
   id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
+  first_name VARCHAR(100) NOT NULL,
+  last_name VARCHAR(100) NOT NULL,
   initials VARCHAR(10) NOT NULL,
   job_title VARCHAR(255) NOT NULL
 );

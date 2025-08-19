@@ -137,8 +137,8 @@ const App: React.FC = () => {
                     }
                 />
                 {activeView === 'dashboard' && (
-                    <main className="flex-1 overflow-y-auto p-6">
-                        <Dashboard userName={user?.name || ''} />
+                    <main className="flex-1 overflow-y-auto p-0">
+                        <Dashboard userFirstName={teamMembers[0]?.first_name || ''} />
                     </main>
                 )}
                 {activeView === 'pipeline' && (

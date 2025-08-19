@@ -306,11 +306,11 @@ app.delete('/api/project-files/:id', async (req, res) => {
 // Add a team member
 app.post('/api/team-members', async (req, res) => {
   try {
-    const { name, initials, jobTitle } = req.body;
-    if (!name || !initials || !jobTitle) return res.status(400).json({ error: 'Missing fields' });
+    const { first_name, last_name, initials, jobTitle } = req.body;
+    if (!first_name || !last_name || !initials || !jobTitle) return res.status(400).json({ error: 'Missing fields' });
     const { rows } = await pool.query(
-      'INSERT INTO team_members (name, initials, job_title) VALUES ($1, $2, $3) RETURNING *',
-      [name, initials, jobTitle]
+      'INSERT INTO team_members (first_name, last_name, initials, job_title) VALUES ($1, $2, $3, $4) RETURNING *',
+      [first_name, last_name, initials, jobTitle]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -335,11 +335,11 @@ app.delete('/api/team-members/:id', async (req, res) => {
 app.put('/api/team-members/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, initials, jobTitle } = req.body;
-    if (!name || !initials || !jobTitle) return res.status(400).json({ error: 'Missing fields' });
+    const { first_name, last_name, initials, jobTitle } = req.body;
+    if (!first_name || !last_name || !initials || !jobTitle) return res.status(400).json({ error: 'Missing fields' });
     const { rows } = await pool.query(
-      'UPDATE team_members SET name = $1, initials = $2, job_title = $3 WHERE id = $4 RETURNING *',
-      [name, initials, jobTitle, id]
+      'UPDATE team_members SET first_name = $1, last_name = $2, initials = $3, job_title = $4 WHERE id = $5 RETURNING *',
+      [first_name, last_name, initials, jobTitle, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
