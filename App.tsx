@@ -68,7 +68,7 @@ const App: React.FC = () => {
     const [isManageTeamModalOpen, setIsManageTeamModalOpen] = useState(false);
     const [isHPUSizingModalOpen, setIsHPUSizingModalOpen] = useState(false);
     const [isEstimateCalculatorOpen, setIsEstimateCalculatorOpen] = useState(false);
-    const [activeView, setActiveView] = useState<View>('pipeline');
+    const [activeView, setActiveView] = useState<View>('dashboard');
     const [companyTypeForModal, setCompanyTypeForModal] = useState<CompanyType | null>(null);
 
     const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
