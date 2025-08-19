@@ -157,6 +157,14 @@ const App: React.FC = () => {
                     project={projectToEdit}
                     onUpdateProject={handleUpdateProjectAndCloseModal}
                     onClose={() => setIsEditProjectModalOpen(false)}
+                    companies={companies}
+                    contacts={contacts}
+                    teamMembers={teamMembers}
+                    onAddCompanyClick={(type) => {
+                        setCompanyTypeForModal(type);
+                        setIsAddCompanyModalOpen(true);
+                    }}
+                    onAddContactClick={() => setIsAddContactModalOpen(true)}
                 />
             )}
             {isAddCompanyModalOpen && (
