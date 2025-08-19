@@ -25,12 +25,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ userFirstName }) => {
 // ...existing code...
 
     return (
-        <div className="space-y-6 mt-16 ml-56 p-6">
-            <div>
+        <div className="space-y-6 mt-16 p-6">
+            <div className="max-w-4xl mx-auto">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Welcome back, {userFirstName}!</h1>
                 <p className="mt-2 text-gray-500 dark:text-gray-400">Here's a summary of your sales pipeline and latest updates.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto justify-center">
                 <Widget icon={<TrendingUpIcon className="w-6 h-6" />} title="Sales Forecast">
                     <p>Sales forecast widget is under construction.</p>
                     <p className="mt-2 text-sm">This area will display projected sales, quarterly goals, and performance metrics.</p>
