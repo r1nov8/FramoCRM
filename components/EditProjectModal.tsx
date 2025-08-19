@@ -59,10 +59,13 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
             setPrimaryContactId(project.primaryContactId ? String(project.primaryContactId) : '');
     // When contacts change, if a new contact was added, select it automatically
     useEffect(() => {
-        if (!primaryContactId && contacts.length > 0) {
-            setPrimaryContactId(String(contacts[0].id));
+        if (contacts.length > 0) {
+            // If current primaryContactId is not in contacts, select the newest
+            if (!contacts.find(c => String(c.id) === primaryContactId)) {
+                setPrimaryContactId(String(contacts[0].id));
+            }
         }
-    }, [contacts, primaryContactId]);
+    }, [contacts]);
             setNotes(project.notes);
             setProducts(project.products);
             setNumberOfVessels(project.numberOfVessels);
