@@ -55,7 +55,11 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
             setShipyardId(project.shipyardId);
             setVesselOwnerId(project.vesselOwnerId || '');
             setDesignCompanyId(project.designCompanyId || '');
-            setPrimaryContactId(project.primaryContactId);
+            setPrimaryContactId(
+                project.primaryContactId && contacts.find(c => String(c.id) === String(project.primaryContactId))
+                    ? String(project.primaryContactId)
+                    : ''
+            );
             setNotes(project.notes);
             setProducts(project.products);
             setNumberOfVessels(project.numberOfVessels);
