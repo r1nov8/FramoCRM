@@ -187,10 +187,12 @@ app.post('/api/contacts', async (req, res) => {
 app.put('/api/contacts/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, companyId } = req.body;
+    // Accept both companyId and company_id for compatibility
+    const { name, email, phone, companyId, company_id } = req.body;
+    const resolvedCompanyId = company_id !== undefined ? company_id : companyId;
     const { rows } = await pool.query(
       'UPDATE contacts SET name = $1, email = $2, phone = $3, company_id = $4 WHERE id = $5 RETURNING *',
-      [name, email, phone, companyId, id]
+      [name, email, phone, resolvedCompanyId, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
