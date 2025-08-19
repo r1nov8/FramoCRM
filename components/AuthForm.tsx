@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
+
 interface AuthFormProps {
-  onAuthSuccess: (token: string) => void;
+  onAuthSuccess: (token: string, user: { name: string; initials: string }) => void;
 }
 
 export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
@@ -22,7 +23,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Unknown error');
-      onAuthSuccess(data.token);
+  // Assume backend returns user info as { token, user: { name, initials } }
+  onAuthSuccess(data.token, data.user || { name: username, initials: username.slice(0, 2).toUpperCase() });
     } catch (err: any) {
       setError(err.message);
     } finally {

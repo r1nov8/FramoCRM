@@ -24,13 +24,20 @@ import { useData } from './context/DataContext';
 type View = 'dashboard' | 'pipeline';
 
 const App: React.FC = () => {
+
     const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
-    const handleAuthSuccess = (jwt: string) => {
+    const [user, setUser] = useState<{ name: string; initials: string } | null>(() => {
+        const stored = localStorage.getItem('user');
+        return stored ? JSON.parse(stored) : null;
+    });
+    const handleAuthSuccess = (jwt: string, userInfo: { name: string; initials: string }) => {
         setToken(jwt);
+        setUser(userInfo);
         localStorage.setItem('token', jwt);
+        localStorage.setItem('user', JSON.stringify(userInfo));
     };
 
-    if (!token) {
+    if (!token || !user) {
         return <AuthForm onAuthSuccess={handleAuthSuccess} />;
     }
 
@@ -95,6 +102,7 @@ const App: React.FC = () => {
         setIsEditProjectModalOpen(true);
     };
 
+
     const pageTitle = useMemo(() => {
         if (activeView === 'pipeline') return 'Project Pipeline';
         return 'Dashboard';
@@ -116,7 +124,7 @@ const App: React.FC = () => {
                                 <UsersIcon className="w-5 h-5" />
                             </button>
                             <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-                                ST
+                                {user?.initials || 'ST'}
                             </div>
                             <button
                                 onClick={handleLogout}
@@ -130,7 +138,7 @@ const App: React.FC = () => {
                 />
                 {activeView === 'dashboard' && (
                     <main className="flex-1 overflow-y-auto p-6">
-                        <Dashboard />
+                        <Dashboard userName={user?.name || ''} />
                     </main>
                 )}
                 {activeView === 'pipeline' && (
