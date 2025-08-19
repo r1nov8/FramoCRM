@@ -28,6 +28,12 @@ const App: React.FC = () => {
         return <AuthForm onAuthSuccess={handleAuthSuccess} />;
     }
 
+    // Logout handler
+    const handleLogout = () => {
+        setToken(null);
+        localStorage.removeItem('token');
+    };
+
     // All data and data handlers are now pulled from context
     const {
         projects,
@@ -107,14 +113,20 @@ const App: React.FC = () => {
         <div className="flex h-screen font-sans bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
             <IconSidebar activeView={activeView} onNavigate={setActiveView} />
             <div className="flex flex-col flex-1 overflow-hidden">
-                <Header title={pageTitle} onManageTeamClick={() => setIsManageTeamModalOpen(true)} />
-                
+                <div className="flex items-center justify-between">
+                    <Header title={pageTitle} onManageTeamClick={() => setIsManageTeamModalOpen(true)} />
+                    <button
+                        onClick={handleLogout}
+                        className="m-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                    >
+                        Logout
+                    </button>
+                </div>
                 {activeView === 'dashboard' && (
                     <main className="flex-1 overflow-y-auto p-6">
                         <Dashboard />
                     </main>
                 )}
-
                 {activeView === 'pipeline' && (
                     <ProjectPipelineView
                         projects={projects}
@@ -133,7 +145,6 @@ const App: React.FC = () => {
                     />
                 )}
             </div>
-
             {isAddProjectModalOpen && (
                 <AddProjectModal
                     onAddProject={handleAddProjectAndCloseModal}
@@ -173,7 +184,6 @@ const App: React.FC = () => {
                 />
             )}
         </div>
-
     );
 }
 
