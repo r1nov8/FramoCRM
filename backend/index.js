@@ -169,11 +169,13 @@ app.get('/api/contacts', async (req, res) => {
 
 app.post('/api/contacts', async (req, res) => {
   try {
-    const { name, email, phone, companyId } = req.body;
+    // Accept both companyId and company_id for compatibility
+    const { name, email, phone, companyId, company_id } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'Missing fields' });
+    const resolvedCompanyId = company_id !== undefined ? company_id : companyId;
     const { rows } = await pool.query(
       'INSERT INTO contacts (name, email, phone, company_id) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, email, phone, companyId]
+      [name, email, phone, resolvedCompanyId]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
