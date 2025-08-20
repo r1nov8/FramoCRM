@@ -1,3 +1,24 @@
+    const handleUpdateTeamMember = async (member: TeamMember) => {
+        try {
+            const res = await fetch(`${API_URL}/api/team-members/${member.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    first_name: member.first_name,
+                    last_name: member.last_name,
+                    initials: member.initials,
+                    jobTitle: member.jobTitle
+                })
+            });
+            if (!res.ok) throw new Error('Failed to update team member');
+            const updated = await res.json();
+            // Map job_title to jobTitle for frontend
+            const updatedMember = { ...updated, jobTitle: updated.job_title };
+            setTeamMembers(prev => prev.map(m => m.id === updatedMember.id ? updatedMember : m));
+        } catch (err) {
+            console.error('Update team member error:', err);
+        }
+    };
 import { useState, useEffect } from 'react';
 
 // Helper to get API URL from env or fallback
@@ -36,6 +57,27 @@ export const useCrmData = () => {
 
     useEffect(() => saveToLocalStorage('crm_projects', projects), [projects]);
 
+    // --- Moved handleUpdateTeamMember here so it's defined before return ---
+    const handleUpdateTeamMember = async (member: TeamMember) => {
+        try {
+            const res = await fetch(`${API_URL}/api/team-members/${member.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    first_name: member.first_name,
+                    last_name: member.last_name,
+                    initials: member.initials,
+                    jobTitle: member.jobTitle
+                })
+            });
+            if (!res.ok) throw new Error('Failed to update team member');
+            const updated = await res.json();
+            setTeamMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
+        } catch (err) {
+            console.error('Update team member error:', err);
+        }
+    };
+
     // Fetch companies from backend
     useEffect(() => {
         fetch(`${API_URL}/api/companies`)
@@ -62,7 +104,10 @@ export const useCrmData = () => {
     useEffect(() => {
         fetch(`${API_URL}/api/team-members`)
             .then(res => res.json())
-            .then(data => setTeamMembers(data))
+            .then(data => {
+                // Map job_title to jobTitle for frontend
+                setTeamMembers(data.map((m: any) => ({ ...m, jobTitle: m.job_title })));
+            })
             .catch(err => {
                 console.error('Failed to fetch team members:', err);
                 setTeamMembers([]);
@@ -316,6 +361,7 @@ export const useCrmData = () => {
         handleAddCompany,
         handleAddContact,
         handleAddTeamMember,
+        handleUpdateTeamMember,
         handleDeleteTeamMember,
         handleUploadFiles,
         handleDeleteFile,

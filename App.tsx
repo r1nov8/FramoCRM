@@ -1,3 +1,7 @@
+    const handleUpdateProjectPriceAndCloseModal = (price: number, currency: Currency) => {
+        handleUpdateProjectPrice(selectedProjectId!, price, currency);
+        setIsEstimateCalculatorOpen(false);
+    };
 
 import React, { useState, useMemo } from 'react';
 import { Header } from './components/Header';
@@ -36,6 +40,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
         handleAddCompany,
         handleAddContact,
         handleAddTeamMember,
+        handleUpdateTeamMember,
         handleDeleteTeamMember,
         handleUploadFiles,
         handleDeleteFile,
@@ -185,13 +190,17 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                     teamMembers={teamMembers}
                     onAddTeamMember={handleAddTeamMember}
                     onDeleteTeamMember={handleDeleteTeamMember}
+                    onUpdateTeamMember={handleUpdateTeamMember}
                 />
             )}
             {isHPUSizingModalOpen && (
                 <HPUSizingModal onClose={() => setIsHPUSizingModalOpen(false)} />
             )}
-            {isEstimateCalculatorOpen && (
+            {isEstimateCalculatorOpen && selectedProject && (
                 <EstimateCalculatorModal
+                    project={selectedProject}
+                    companies={companies}
+                    teamMembers={teamMembers}
                     onUpdateProjectPrice={handleUpdateProjectPriceAndCloseModal}
                     onClose={() => setIsEstimateCalculatorOpen(false)}
                 />

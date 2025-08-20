@@ -205,7 +205,9 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                     <label htmlFor="salesRep" className={labelClass}>Sales Representative</label>
                     <select id="salesRep" value={salesRepId} onChange={e => setSalesRepId(e.target.value)} className={inputClass} required>
                         <option value="">Select Sales Rep</option>
-                        {teamMembers.map(tm => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+                        {teamMembers.map(tm => (
+                            <option key={tm.id} value={tm.id}>{tm.first_name} {tm.last_name}</option>
+                        ))}
                     </select>
                 </div>
 

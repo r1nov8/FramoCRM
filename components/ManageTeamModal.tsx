@@ -53,7 +53,8 @@ export const ManageTeamModal: React.FC<ManageTeamModalProps> = ({ onClose, teamM
             alert('Please provide first name, last name, and job title.');
             return;
         }
-        onAddTeamMember({ first_name: newFirstName, last_name: newLastName, initials: '', jobTitle: newJobTitle });
+        const initials = `${newFirstName[0] || ''}${newLastName[0] || ''}`.toUpperCase();
+        onAddTeamMember({ first_name: newFirstName, last_name: newLastName, initials, jobTitle: newJobTitle });
         setNewFirstName('');
         setNewLastName('');
         setNewJobTitle('');
@@ -146,9 +147,13 @@ export const ManageTeamModal: React.FC<ManageTeamModalProps> = ({ onClose, teamM
                                         <button onClick={cancelEdit} className="px-3 py-1 text-sm font-medium text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 ml-2">Cancel</button>
                                     </div>
                                 ) : (
-                                    <div className="flex-1 flex flex-col md:flex-row md:items-center gap-2">
-                                        <span className="font-medium text-base">{member.first_name} {member.last_name}</span>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">{member.jobTitle}</span>
+                                    <div className="flex-1 flex flex-row items-center gap-2">
+                                        <span className="font-medium text-base">
+                                            {member.first_name} {member.last_name}
+                                        </span>
+                                        {member.jobTitle && (
+                                            <span className="text-base text-gray-400 dark:text-gray-400 ml-1">- {member.jobTitle}</span>
+                                        )}
                                     </div>
                                 )}
                                 <div className="flex items-center gap-2 ml-2">
