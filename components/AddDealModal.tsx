@@ -162,47 +162,49 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
 
                  <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                     <h3 className="font-semibold mb-2 text-gray-800 dark:text-gray-200">Commercial Details</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                        <div className="flex flex-col justify-end">
                             <label htmlFor="numberOfVessels" className={labelClass}>No. of Vessels</label>
                             <input type="number" id="numberOfVessels" min="1" value={numberOfVessels} onChange={e => setNumberOfVessels(Number(e.target.value))} className={inputClass} />
                         </div>
-                        <div>
+                        <div className="flex flex-col justify-end">
                             <label htmlFor="pumpsPerVessel" className={labelClass}>Pumps per Vessel</label>
                             <input type="number" id="pumpsPerVessel" min="1" value={pumpsPerVessel} onChange={e => setPumpsPerVessel(Number(e.target.value))} className={inputClass} />
                         </div>
-                        <div>
+                        <div className="flex flex-col justify-end">
                             <label htmlFor="fuelType" className={labelClass}>Fuel Type</label>
                             <select id="fuelType" value={fuelType} onChange={e => setFuelType(e.target.value as FuelType)} className={inputClass}>
                                 {Object.values(FuelType).map(u => <option key={u} value={u}>{u}</option>)}
                             </select>
                         </div>
-                        <div>
+                        <div className="flex flex-col justify-end">
                             <label htmlFor="vesselType" className={labelClass}>Vessel Type</label>
                             <select id="vesselType" value={vesselType} onChange={e => setVesselType(e.target.value)} className={inputClass} required>
                                 <option value="">Select Vessel Type</option>
                                 {VESSEL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                             </select>
                         </div>
-                        <div>
-                            <label htmlFor="vesselSize" className={labelClass}>Vessel Size</label>
-                            <div className="flex space-x-2 items-center">
-                                <input type="number" id="vesselSize" min="0" value={vesselSize} onChange={e => setVesselSize(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
-                                <span className="inline-flex items-center px-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm h-10">
-                                    {vesselType === 'RoRo' || vesselType === 'RoPax' ? 'LM' : vesselType === 'PCTC' ? 'CEU' : 'DWT'}
-                                </span>
+                        {/* Vessel Size and Currency in same row for perfect alignment */}
+                        <div className="md:col-span-2 flex flex-row gap-6">
+                            <div className="flex flex-col flex-1 justify-end">
+                                <label htmlFor="vesselSize" className={labelClass}>Vessel Size</label>
+                                <div className="flex items-center gap-2">
+                                    <input type="number" id="vesselSize" min="0" value={vesselSize} onChange={e => setVesselSize(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass + ' flex-1'} />
+                                    <span className="inline-flex items-center px-3 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm h-9 ml-0">
+                                        {vesselType === 'RoRo' || vesselType === 'RoPax' ? 'LM' : vesselType === 'PCTC' ? 'CEU' : 'DWT'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex flex-col flex-1 justify-end">
+                                <label htmlFor="currency" className={labelClass}>Default Currency</label>
+                                <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className={inputClass}>
+                                    {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
                             </div>
                         </div>
-                        <div>
-                            <label htmlFor="currency" className={labelClass}>Default Currency</label>
-                            <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className={inputClass}>
-                                {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
                     </div>
-                     <div className="mt-3 text-right">
-                        <span className={labelClass}>Total Project Value</span>
-                        <p className="text-lg font-bold text-gray-500 dark:text-gray-400 italic">To be estimated</p>
+                    <div className="flex justify-end items-center mt-2 min-h-[48px]">
+                        <span className="text-gray-500 dark:text-gray-300 italic text-lg font-semibold text-right">Total Project Value<br /><span className="text-base font-normal">To be estimated</span></span>
                     </div>
                 </div>
 
