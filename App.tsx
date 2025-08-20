@@ -1,10 +1,5 @@
-    // Add missing handler for AddContactModal
-    const handleAddContactAndCloseModal = (newContact: Omit<Contact, 'id'>) => {
-        handleAddContact(newContact);
-        setIsAddContactModalOpen(false);
-    };
+
 import React, { useState, useMemo } from 'react';
-import { AuthForm } from './components/AuthForm';
 import { Header } from './components/Header';
 import { ExitDoorIcon, UsersIcon } from './components/icons';
 import { IconSidebar } from './components/IconSidebar';
@@ -23,31 +18,12 @@ import { useData } from './context/DataContext';
 
 type View = 'dashboard' | 'pipeline';
 
-const App: React.FC = () => {
+interface AppProps {
+    user: { name: string; initials: string };
+    onLogout: () => void;
+}
 
-    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
-    const [user, setUser] = useState<{ name: string; initials: string } | null>(() => {
-        const stored = localStorage.getItem('user');
-        return stored ? JSON.parse(stored) : null;
-    });
-    const handleAuthSuccess = (jwt: string, userInfo: { name: string; initials: string }) => {
-        setToken(jwt);
-        setUser(userInfo);
-        localStorage.setItem('token', jwt);
-        localStorage.setItem('user', JSON.stringify(userInfo));
-    };
-
-    if (!token || !user) {
-        return <AuthForm onAuthSuccess={handleAuthSuccess} />;
-    }
-
-    // Logout handler
-    const handleLogout = () => {
-        setToken(null);
-        localStorage.removeItem('token');
-    };
-
-    // All data and data handlers are now pulled from context
+const App: React.FC<AppProps> = ({ user, onLogout }) => {
     const {
         projects,
         companies,
@@ -66,7 +42,6 @@ const App: React.FC = () => {
         handleUpdateProjectPrice
     } = useData();
 
-    // UI state for modals and views remains in the App component
     const [isAddProjectModalOpen, setIsAddProjectModalOpen] = useState(false);
     const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
     const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
@@ -95,13 +70,15 @@ const App: React.FC = () => {
         setIsAddCompanyModalOpen(false);
     };
 
+    const handleAddContactAndCloseModal = (newContact: Omit<Contact, 'id'>) => {
+        handleAddContact(newContact);
+        setIsAddContactModalOpen(false);
+    };
 
-    // Fix: Add missing handleOpenEditModal
     const handleOpenEditModal = (project: Project) => {
         setProjectToEdit(project);
         setIsEditProjectModalOpen(true);
     };
-
 
     const pageTitle = useMemo(() => {
         if (activeView === 'pipeline') return 'Project Pipeline';
@@ -127,7 +104,7 @@ const App: React.FC = () => {
                                 {user?.initials || 'ST'}
                             </div>
                             <button
-                                onClick={handleLogout}
+                                onClick={onLogout}
                                 className="p-2 rounded-md bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-800"
                                 title="Logout"
                             >
@@ -169,6 +146,9 @@ const App: React.FC = () => {
                 <AddProjectModal
                     onAddProject={handleAddProjectAndCloseModal}
                     onClose={() => setIsAddProjectModalOpen(false)}
+                    companies={companies}
+                    contacts={contacts}
+                    teamMembers={teamMembers}
                 />
             )}
             {isEditProjectModalOpen && projectToEdit && (

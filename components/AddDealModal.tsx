@@ -19,6 +19,11 @@ const stagesForGrossMargin = [ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.
 const stagesForHedgeCurrency = [ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON, ProjectStage.LOST, ProjectStage.CANCELLED];
 
 export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAddProject, companies, contacts, teamMembers, onAddCompanyClick, onAddContactClick }) => {
+    // Defensive: ensure arrays are always defined
+    companies = companies || [];
+    contacts = contacts || [];
+    teamMembers = teamMembers || [];
+
     const [projectName, setProjectName] = useState('');
     const [opportunityNumber, setOpportunityNumber] = useState(`OPP-${Date.now()}`);
     const [orderNumber, setOrderNumber] = useState('');
@@ -42,43 +47,50 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!projectName || !opportunityNumber || !salesRepId || !shipyardId || !primaryContactId || !currency) {
-            alert('Please fill in all required fields: Project Name, Opportunity No., Sales Rep, Shipyard, Primary Contact, and Currency.');
-            return;
+        try {
+            if (!projectName || !opportunityNumber || !salesRepId || !shipyardId || !primaryContactId || !currency) {
+                alert('Please fill in all required fields: Project Name, Opportunity No., Sales Rep, Shipyard, Primary Contact, and Currency.');
+                return;
+            }
+            if (lateStagesForOrderNumber.includes(stage) && !orderNumber) {
+                alert('Please provide an Order No. for projects in this stage.');
+                return;
+            }
+            if (stagesForHedgeCurrency.includes(stage) && !hedgeCurrency) {
+                alert('Please select a Hedge Currency for projects in this stage.');
+                return;
+            }
+            const projectData = {
+                name: projectName,
+                opportunityNumber,
+                orderNumber: orderNumber || undefined,
+                value: 0, // Initial value is 0, will be updated by calculator
+                currency,
+                hedgeCurrency: hedgeCurrency || undefined,
+                grossMarginPercent: typeof grossMarginPercent === 'number' ? grossMarginPercent : undefined,
+                closingDate,
+                stage,
+                salesRepId,
+                shipyardId,
+                vesselOwnerId: vesselOwnerId || undefined,
+                designCompanyId: designCompanyId || undefined,
+                primaryContactId,
+                products,
+                notes,
+                numberOfVessels,
+                pumpsPerVessel,
+                pricePerVessel: undefined, // Price is set via calculator
+                vesselSize: typeof vesselSize === 'number' ? vesselSize : undefined,
+                vesselSizeUnit: vesselSizeUnit || undefined,
+                fuelType,
+                files: [],
+            };
+            console.log('[AddProjectModal] Submitting project:', projectData);
+            onAddProject(projectData);
+        } catch (err) {
+            console.error('[AddProjectModal] Error in handleSubmit:', err);
+            alert('An error occurred while submitting the project. Check the console for details.');
         }
-        if (lateStagesForOrderNumber.includes(stage) && !orderNumber) {
-            alert('Please provide an Order No. for projects in this stage.');
-            return;
-        }
-        if (stagesForHedgeCurrency.includes(stage) && !hedgeCurrency) {
-            alert('Please select a Hedge Currency for projects in this stage.');
-            return;
-        }
-        onAddProject({
-            name: projectName,
-            opportunityNumber,
-            orderNumber: orderNumber || undefined,
-            value: 0, // Initial value is 0, will be updated by calculator
-            currency,
-            hedgeCurrency: hedgeCurrency || undefined,
-            grossMarginPercent: typeof grossMarginPercent === 'number' ? grossMarginPercent : undefined,
-            closingDate,
-            stage,
-            salesRepId,
-            shipyardId,
-            vesselOwnerId: vesselOwnerId || undefined,
-            designCompanyId: designCompanyId || undefined,
-            primaryContactId,
-            products,
-            notes,
-            numberOfVessels,
-            pumpsPerVessel,
-            pricePerVessel: undefined, // Price is set via calculator
-            vesselSize: typeof vesselSize === 'number' ? vesselSize : undefined,
-            vesselSizeUnit: vesselSizeUnit || undefined,
-            fuelType,
-            files: [],
-        });
     };
 
     const handleProductChange = <K extends keyof Product,>(index: number, field: K, fieldValue: Product[K]) => {

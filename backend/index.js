@@ -12,15 +12,28 @@ const app = express();
 const port = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
 
+const allowedOrigins = [
+  'https://framocrm-1.onrender.com',
+  'http://localhost:5173'
+];
+
 app.use(cors({
-  origin: 'https://framocrm-1.onrender.com',
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'), false);
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://crmuser:crmpassword@localhost:5432/crmdb',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
 // --- Auth endpoints ---

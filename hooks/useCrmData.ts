@@ -93,18 +93,24 @@ export const useCrmData = () => {
 
     const handleAddProject = async (newProject: Omit<Project, 'id'>) => {
         try {
+            console.log('[useCrmData] handleAddProject called with:', newProject);
             const normalized = normalizeProjectIds(newProject);
+            console.log('[useCrmData] Normalized project:', normalized);
             const res = await fetch(`${API_URL}/api/projects`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(normalized)
             });
-            if (!res.ok) throw new Error('Failed to add project');
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error('Failed to add project: ' + errorText);
+            }
             const created = await res.json();
             setProjects(prev => [created, ...prev]);
             setSelectedProjectId(created.id);
         } catch (err) {
-            console.error('Add project error:', err);
+            console.error('[useCrmData] Add project error:', err);
+            alert('Failed to add project. See console for details.');
         }
     };
 
