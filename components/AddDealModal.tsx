@@ -1,4 +1,12 @@
 import React, { useState, useMemo } from 'react';
+// Vessel type options
+const VESSEL_TYPES = [
+    'Container',
+    'Bulk',
+    'PCTC',
+    'RoRo',
+    'RoPax',
+];
 import type { Company, Contact, Project, Product, TeamMember } from '../types';
 import { ProjectStage, ProductType, CompanyType, Currency, VesselSizeUnit, FuelType } from '../types';
 import { Modal } from './Modal';
@@ -25,6 +33,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     contacts = contacts || [];
     teamMembers = teamMembers || [];
 
+    const [vesselType, setVesselType] = useState('');
     const [projectName, setProjectName] = useState('');
     // Find the highest OPP number and suggest the next one
     const highestOpp = useMemo(() => {
@@ -132,7 +141,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
         setProducts(products.filter((_, i) => i !== index));
     };
 
-    const inputClass = "w-full p-2 border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none";
+    const inputClass = "w-full px-2 py-1.5 border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm";
     const labelClass = "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1";
     const addButtonClass = "p-2 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 flex-shrink-0";
 
@@ -164,17 +173,24 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                         </div>
                         <div>
                             <label htmlFor="fuelType" className={labelClass}>Fuel Type</label>
-                             <select id="fuelType" value={fuelType} onChange={e => setFuelType(e.target.value as FuelType)} className={inputClass}>
+                            <select id="fuelType" value={fuelType} onChange={e => setFuelType(e.target.value as FuelType)} className={inputClass}>
                                 {Object.values(FuelType).map(u => <option key={u} value={u}>{u}</option>)}
                             </select>
                         </div>
                         <div>
+                            <label htmlFor="vesselType" className={labelClass}>Vessel Type</label>
+                            <select id="vesselType" value={vesselType} onChange={e => setVesselType(e.target.value)} className={inputClass} required>
+                                <option value="">Select Vessel Type</option>
+                                {VESSEL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                            </select>
+                        </div>
+                        <div>
                             <label htmlFor="vesselSize" className={labelClass}>Vessel Size</label>
-                            <div className="flex space-x-2">
+                            <div className="flex space-x-2 items-center">
                                 <input type="number" id="vesselSize" min="0" value={vesselSize} onChange={e => setVesselSize(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
-                                <select value={vesselSizeUnit} onChange={e => setVesselSizeUnit(e.target.value as VesselSizeUnit)} className={inputClass}>
-                                    {Object.values(VesselSizeUnit).map(u => <option key={u} value={u}>{u}</option>)}
-                                </select>
+                                <span className="inline-flex items-center px-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm h-10">
+                                    {vesselType === 'RoRo' || vesselType === 'RoPax' ? 'LM' : vesselType === 'PCTC' ? 'CEU' : 'DWT'}
+                                </span>
                             </div>
                         </div>
                         <div>
