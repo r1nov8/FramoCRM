@@ -32,13 +32,19 @@ const NavItem: React.FC<{
     );
 };
 
+
 export const IconSidebar: React.FC<IconSidebarProps> = ({ activeView, onNavigate }) => {
     return (
-        <nav className="flex flex-col items-center w-20 bg-gray-800 text-white shadow-lg z-20 flex-shrink-0">
-            <button onClick={() => onNavigate('dashboard')} className="flex items-center justify-center w-20 h-20 border-b-2 border-gray-700 hover:bg-gray-700/50 transition-colors duration-200 p-0 m-0">
-                <img src="/framo-logo.png" alt="Framo Logo" className="w-12 h-12 rounded-2xl object-cover" />
+        <nav className="flex flex-col items-center w-20 bg-gray-800 text-white shadow-lg z-20 flex-shrink-0 pt-2">
+            <button
+                onClick={() => onNavigate('dashboard')}
+                className={`flex flex-col items-center justify-center w-full p-3 focus:outline-none transition-colors duration-200 group ${activeView === 'dashboard' ? 'text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
+                aria-label="Dashboard"
+            >
+                <img src="/framo-logo.png" alt="Framo Logo" className="w-8 h-8 rounded-lg object-cover mb-1" />
+                <span className="text-xs font-medium">Home</span>
             </button>
-            <div className="flex flex-col items-center w-full mt-4 space-y-2">
+            <div className="flex flex-col items-center w-full mt-2 space-y-2">
                 <NavItem
                     label="Search"
                     icon={<SearchIcon className="w-6 h-6" />}
