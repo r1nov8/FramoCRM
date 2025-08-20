@@ -161,6 +161,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                     companies={companies}
                     contacts={contacts}
                     teamMembers={teamMembers}
+                    projects={projects}
                 />
             )}
             {isEditProjectModalOpen && projectToEdit && (

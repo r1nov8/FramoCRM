@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Company, Contact, Project, Product, TeamMember } from '../types';
 import { ProjectStage, ProductType, CompanyType, Currency, VesselSizeUnit, FuelType } from '../types';
 import { Modal } from './Modal';
@@ -10,6 +10,7 @@ interface AddProjectModalProps {
     companies: Company[];
     contacts: Contact[];
     teamMembers: TeamMember[];
+    projects: Project[];
     onAddCompanyClick: (type: CompanyType) => void;
     onAddContactClick: () => void;
 }
@@ -18,14 +19,29 @@ const lateStagesForOrderNumber = [ProjectStage.ORDER_CONFIRMATION, ProjectStage.
 const stagesForGrossMargin = [ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON];
 const stagesForHedgeCurrency = [ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON, ProjectStage.LOST, ProjectStage.CANCELLED];
 
-export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAddProject, companies, contacts, teamMembers, onAddCompanyClick, onAddContactClick }) => {
+export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAddProject, companies, contacts, teamMembers, projects, onAddCompanyClick, onAddContactClick }) => {
     // Defensive: ensure arrays are always defined
     companies = companies || [];
     contacts = contacts || [];
     teamMembers = teamMembers || [];
 
     const [projectName, setProjectName] = useState('');
-    const [opportunityNumber, setOpportunityNumber] = useState(`OPP-${Date.now()}`);
+    // Find the highest OPP number and suggest the next one
+    const highestOpp = useMemo(() => {
+        const oppNumbers = companies
+            .concat(contacts as any) // Defensive, but not needed, just to keep the code safe
+            .length; // Dummy, ignore
+        return projects
+            ? projects
+                .map((p: any) => {
+                    const match = /OPP-(\d+)/.exec(p.opportunityNumber);
+                    return match ? parseInt(match[1], 10) : null;
+                })
+                .filter((n: number | null) => n !== null)
+                .reduce((max: number, n: number) => Math.max(max, n), 0)
+            : 0;
+    }, [projects]);
+    const [opportunityNumber, setOpportunityNumber] = useState(() => `OPP-${highestOpp + 1}`);
     const [orderNumber, setOrderNumber] = useState('');
     const [closingDate, setClosingDate] = useState(new Date().toISOString().split('T')[0]);
     const [stage, setStage] = useState<ProjectStage>(ProjectStage.LEAD);
@@ -45,12 +61,21 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     const [vesselSizeUnit, setVesselSizeUnit] = useState<VesselSizeUnit>(VesselSizeUnit.DWT);
     const [fuelType, setFuelType] = useState<FuelType>(FuelType.METHANOL);
 
+    const [oppError, setOppError] = useState<string | null>(null);
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         try {
             if (!projectName || !opportunityNumber || !salesRepId || !shipyardId || !primaryContactId || !currency) {
                 alert('Please fill in all required fields: Project Name, Opportunity No., Sales Rep, Shipyard, Primary Contact, and Currency.');
                 return;
+            }
+            // Check for duplicate OPP number
+            const duplicate = projects.some((p: any) => p.opportunityNumber === opportunityNumber);
+            if (duplicate) {
+                setOppError('Opp. No in use');
+                return;
+            } else {
+                setOppError(null);
             }
             if (lateStagesForOrderNumber.includes(stage) && !orderNumber) {
                 alert('Please provide an Order No. for projects in this stage.');
@@ -121,7 +146,8 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                     </div>
                     <div>
                         <label htmlFor="opportunityNumber" className={labelClass}>Opportunity No.</label>
-                        <input type="text" id="opportunityNumber" value={opportunityNumber} onChange={e => setOpportunityNumber(e.target.value)} className={inputClass} required />
+                        <input type="text" id="opportunityNumber" value={opportunityNumber} onChange={e => setOpportunityNumber(e.target.value)} className={inputClass + (oppError ? ' border-red-500' : '')} required />
+                        {oppError && <p className="text-red-500 text-xs mt-1">{oppError}</p>}
                     </div>
                 </div>
 
