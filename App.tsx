@@ -162,32 +162,23 @@ const App: React.FC = () => {
                     {activeView === 'pipeline' && (
                         <div className="absolute top-0 left-[236px] right-0 bottom-0 h-full">
                             <main className="flex-1 p-6 overflow-y-auto h-full">
-                                {projects && companies && contacts && teamMembers ? (
-                                    selectedProject ? (
-                                        <ProjectDetails
-                                            project={selectedProject}
-                                            companies={companies}
-                                            contacts={contacts}
-                                            teamMembers={teamMembers}
-                                            onEditProject={() => handleOpenEditModal(selectedProject)}
-                                            onUploadFiles={handleUploadFiles}
-                                            onDeleteFile={handleDeleteFile}
-                                            onOpenHPUSizing={() => setIsHPUSizingModalOpen(true)}
-                                            onOpenEstimateCalculator={() => setIsEstimateCalculatorOpen(true)}
-                                        />
-                                    ) : (
-                                        <div className="flex items-center justify-center h-full">
-                                            <div className="text-center">
-                                                <h2 className="text-2xl font-semibold text-gray-500">No Project Selected</h2>
-                                                <p className="mt-2 text-gray-400">Please select a project from the list or add a new one.</p>
-                                            </div>
-                                        </div>
-                                    )
+                                {selectedProject ? (
+                                    <ProjectDetails
+                                        project={selectedProject}
+                                        companies={companies}
+                                        contacts={contacts}
+                                        teamMembers={teamMembers}
+                                        onEditProject={() => handleOpenEditModal(selectedProject)}
+                                        onUploadFiles={handleUploadFiles}
+                                        onDeleteFile={handleDeleteFile}
+                                        onOpenHPUSizing={() => setIsHPUSizingModalOpen(true)}
+                                        onOpenEstimateCalculator={() => setIsEstimateCalculatorOpen(true)}
+                                    />
                                 ) : (
                                     <div className="flex items-center justify-center h-full">
                                         <div className="text-center">
-                                            <h2 className="text-2xl font-semibold text-gray-500">Loading...</h2>
-                                            <p className="mt-2 text-gray-400">Please wait while data loads.</p>
+                                            <h2 className="text-2xl font-semibold text-gray-500">No Project Selected</h2>
+                                            <p className="mt-2 text-gray-400">Please select a project from the list or add a new one.</p>
                                         </div>
                                     </div>
                                 )}
