@@ -27,7 +27,7 @@ export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects
     return (
         <aside className="w-[220px] bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                <h2 className="text-base font-semibold">Project Pipeline</h2>
+                <h2 className="text-sm font-semibold">Project Pipeline</h2>
                 <button
                     onClick={onAddProjectClick}
                     className="p-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
