@@ -141,7 +141,13 @@ const App: React.FC = () => {
                         <Dashboard userFirstName={teamMembers[0]?.first_name || ''} />
                     </main>
                 )}
-                {activeView === 'pipeline' && (
+                {/* Slide-in Project Pipeline View */}
+                <div
+                    className={`fixed top-16 left-16 right-0 bottom-0 z-30 transition-transform duration-500 ease-in-out bg-gray-100 dark:bg-gray-900 shadow-xl border-l border-gray-200 dark:border-gray-700 ${
+                        activeView === 'pipeline' ? 'translate-x-0' : 'translate-x-full pointer-events-none opacity-0'
+                    } flex`}
+                    style={{ height: 'calc(100vh - 4rem)' }}
+                >
                     <ProjectPipelineView
                         projects={projects}
                         companies={companies}
@@ -157,7 +163,7 @@ const App: React.FC = () => {
                         onOpenHPUSizing={() => setIsHPUSizingModalOpen(true)}
                         onOpenEstimateCalculator={() => setIsEstimateCalculatorOpen(true)}
                     />
-                )}
+                </div>
             </div>
             {isAddProjectModalOpen && (
                 <AddProjectModal
