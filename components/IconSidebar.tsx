@@ -35,14 +35,13 @@ const NavItem: React.FC<{
 
 export const IconSidebar: React.FC<IconSidebarProps> = ({ activeView, onNavigate }) => {
     return (
-        <nav className="flex flex-col items-center w-20 bg-gray-800 text-white shadow-lg z-20 flex-shrink-0 pt-2">
+        <nav className="flex flex-col items-center w-16 bg-gray-800 text-white shadow-lg z-20 flex-shrink-0 pt-2">
             <button
                 onClick={() => onNavigate('dashboard')}
-                className={`flex flex-col items-center justify-center w-full p-3 focus:outline-none transition-colors duration-200 group ${activeView === 'dashboard' ? 'text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
+                className={`flex flex-col items-center justify-center w-full p-3 focus:outline-none transition-colors duration-200 group ${activeView === 'dashboard' ? 'text-white bg-gray-700/50' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}
                 aria-label="Dashboard"
             >
-                <img src="/framo-logo.png" alt="Framo Logo" className="w-8 h-8 rounded-lg object-cover mb-1" />
-                <span className="text-xs font-medium">Home</span>
+                <img src="/framo-logo.png" alt="Framo Logo" className="w-8 h-8 rounded-lg object-cover" />
             </button>
             <div className="flex flex-col items-center w-full mt-2 space-y-2">
                 <NavItem
