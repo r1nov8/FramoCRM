@@ -120,7 +120,14 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 />
                 {activeView === 'dashboard' && (
                     <main className="flex-1 overflow-y-auto p-0">
-                        <Dashboard userFirstName={teamMembers[0]?.first_name || ''} />
+                        {/* Find team member by initials (case-insensitive) and use their first_name, fallback to username */}
+                        <Dashboard
+                            userFirstName={
+                                (teamMembers.find(
+                                    tm => tm.initials && tm.initials.toLowerCase() === user.initials?.toLowerCase()
+                                )?.first_name) || user.name.split(' ')[0] || user.name || ''
+                            }
+                        />
                     </main>
                 )}
                 {/* Slide-in Project Pipeline View */}
