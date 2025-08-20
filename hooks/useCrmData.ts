@@ -271,6 +271,28 @@ export const useCrmData = () => {
     };
 
 
+
+    // Update a team member
+    const handleUpdateTeamMember = async (member: TeamMember) => {
+        try {
+            const res = await fetch(`${API_URL}/api/team-members/${member.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    first_name: member.first_name,
+                    last_name: member.last_name,
+                    initials: '',
+                    jobTitle: member.jobTitle
+                })
+            });
+            if (!res.ok) throw new Error('Failed to update team member');
+            const updated = await res.json();
+            setTeamMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
+        } catch (err) {
+            console.error('Update team member error:', err);
+        }
+    };
+
     const handleDeleteFile = (projectId: string, fileId: string) => {
         setProjects(prevProjects =>
             prevProjects.map(p => {
@@ -311,6 +333,7 @@ export const useCrmData = () => {
         handleAddContact,
         handleAddTeamMember,
         handleDeleteTeamMember,
+        handleUpdateTeamMember,
         handleUploadFiles,
         handleDeleteFile,
         handleUpdateProjectPrice
