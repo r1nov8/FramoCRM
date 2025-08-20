@@ -35,7 +35,7 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
     onOpenEstimateCalculator,
 }) => {
     return (
-        <div className="flex flex-1 overflow-hidden h-full">
+        <div className="flex flex-1 h-full min-h-0 items-stretch">
             <ProjectListSidebar
                 projects={projects}
                 teamMembers={teamMembers}
@@ -43,7 +43,7 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
                 onSelectProject={onSelectProject}
                 onAddProjectClick={onAddProjectClick}
             />
-            <main className="flex-1 p-6 overflow-y-auto">
+            <main className="flex-1 px-6 pb-6 pt-0 overflow-y-auto">
                 {selectedProject ? (
                     <ProjectDetails
                         project={selectedProject}

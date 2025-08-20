@@ -25,15 +25,15 @@ const stageColors: { [key in ProjectStage]: string } = {
 
 export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects, teamMembers, selectedProjectId, onSelectProject, onAddProjectClick }) => {
     return (
-        <aside className="w-[220px] bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
+        <aside className="w-[220px] bg-white dark:bg-gray-800 flex flex-col h-full overflow-hidden min-h-0 shadow-xl !border-l-0 border-none m-0 p-0">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                 <h2 className="text-sm font-semibold">Project Pipeline</h2>
                 <button
                     onClick={onAddProjectClick}
-                    className="p-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
+                    className="p-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
                     aria-label="Add new project"
                 >
-                    <PlusIcon className="w-5 h-5" />
+                    <PlusIcon className="w-4 h-4" />
                 </button>
             </div>
             <div className="overflow-y-auto">
@@ -42,10 +42,10 @@ export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects
                         <li key={project.id}>
                             <button
                                 onClick={() => onSelectProject(project.id)}
-                                className={`w-full text-left p-3 border-l-4 ${
+                                className={`w-full text-left p-3 ${
                                     selectedProjectId === project.id
-                                        ? 'bg-blue-50 dark:bg-gray-700/50 border-blue-600'
-                                        : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
+                                        ? 'bg-blue-50 dark:bg-gray-700/50'
+                                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                                 } focus:outline-none transition-colors duration-150`}
                             >
                                 <div className="font-semibold text-gray-800 dark:text-gray-100 truncate">{project.name}</div>

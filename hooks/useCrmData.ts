@@ -106,7 +106,11 @@ export const useCrmData = () => {
             .then(res => res.json())
             .then(data => {
                 // Map job_title to jobTitle for frontend
-                setTeamMembers(data.map((m: any) => ({ ...m, jobTitle: m.job_title })));
+                setTeamMembers(data.map((m: any) => ({
+                    ...m,
+                    jobTitle: m.job_title,
+                    name: `${m.first_name} ${m.last_name}`
+                })));
             })
             .catch(err => {
                 console.error('Failed to fetch team members:', err);

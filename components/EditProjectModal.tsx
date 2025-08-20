@@ -51,7 +51,7 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
             setCurrency(project.currency);
             setHedgeCurrency(project.hedgeCurrency || '');
             setGrossMarginPercent(project.grossMarginPercent ?? '');
-            setSalesRepId(project.salesRepId);
+            setSalesRepId(project.salesRepId ? String(project.salesRepId) : '');
             setShipyardId(project.shipyardId);
             setVesselOwnerId(project.vesselOwnerId || '');
             setDesignCompanyId(project.designCompanyId || '');
@@ -227,7 +227,7 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
                     <label htmlFor="salesRep" className={labelClass}>Sales Representative</label>
                     <select id="salesRep" value={salesRepId} onChange={e => setSalesRepId(e.target.value)} className={inputClass} required>
                         <option value="">Select Sales Rep</option>
-                        {teamMembers.map(tm => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+                        {teamMembers.map(tm => <option key={tm.id} value={String(tm.id)}>{tm.name}</option>)}
                     </select>
                 </div>
 

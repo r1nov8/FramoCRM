@@ -91,29 +91,31 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }, [activeView]);
 
     return (
-        <div className="flex h-screen font-sans bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        <div className="flex h-screen font-sans bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-0">
             <IconSidebar activeView={activeView} onNavigate={setActiveView} />
             <div className="flex flex-col flex-1 overflow-hidden pt-20"> {/* pt-20 for header height */}
                 <Header
                     title={pageTitle}
                     rightContent={
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setIsManageTeamModalOpen(true)}
-                                className="flex items-center space-x-2 p-2 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
+                                className="flex items-center justify-center p-1 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
                                 aria-label="Manage team"
+                                title="Manage team"
                             >
                                 <UsersIcon className="w-5 h-5" />
                             </button>
-                            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                            <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm" title={user?.name || 'User'}>
                                 {user?.initials || 'ST'}
                             </div>
                             <button
                                 onClick={onLogout}
-                                className="p-2 rounded-md bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-800"
+                                className="p-1 rounded-md bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-800"
+                                aria-label="Logout"
                                 title="Logout"
                             >
-                                <ExitDoorIcon className="w-6 h-6" />
+                                <ExitDoorIcon className="w-5 h-5" />
                             </button>
                         </div>
                     }

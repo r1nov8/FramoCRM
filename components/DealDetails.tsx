@@ -118,7 +118,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     const isPriceEstimated = project.pricePerVessel !== undefined && project.pricePerVessel > 0;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 mt-0">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                 <div className="flex justify-between items-start">
                     <div>
@@ -187,8 +187,8 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                <div className="lg:col-span-2 flex flex-col gap-6">
                      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                         <h2 className="text-xl font-semibold mb-4">Products & Specifications</h2>
                         <div className="space-y-4">
