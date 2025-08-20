@@ -205,7 +205,6 @@ const App: React.FC = () => {
                     teamMembers={teamMembers}
                     onAddTeamMember={handleAddTeamMember}
                     onDeleteTeamMember={handleDeleteTeamMember}
-                    onUpdateTeamMember={handleUpdateTeamMember}
                 />
             )}
             {isHPUSizingModalOpen && (
