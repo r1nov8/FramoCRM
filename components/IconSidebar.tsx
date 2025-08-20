@@ -1,7 +1,7 @@
 import React from 'react';
 import { SearchIcon, LayoutGridIcon, NewspaperIcon } from './icons';
 
-type View = 'dashboard' | 'pipeline';
+type View = 'dashboard' | 'pipeline' | 'companyInfo';
 
 interface IconSidebarProps {
     activeView: View;
@@ -61,7 +61,8 @@ export const IconSidebar: React.FC<IconSidebarProps> = ({ activeView, onNavigate
                 />
                 <NavItem
                     icon={<NewspaperIcon className="w-5 h-5" />}
-                    onClick={() => alert('Company info coming soon!')}
+                    isActive={activeView === 'companyInfo'}
+                    onClick={() => onNavigate('companyInfo')}
                     ariaLabel="Company Info"
                     title="Company Info"
                 />

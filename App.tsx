@@ -9,6 +9,7 @@ import { ExitDoorIcon, UsersIcon } from './components/icons';
 import { IconSidebar } from './components/IconSidebar';
 import { Dashboard } from './components/Dashboard';
 import { ProjectPipelineView } from './components/ProjectPipelineView';
+import CompanyInfoPage from './components/CompanyInfoPage';
 import { AddProjectModal } from './components/AddDealModal';
 import { EditProjectModal } from './components/EditProjectModal';
 import { AddCompanyModal } from './components/AddCompanyModal';
@@ -20,7 +21,7 @@ import type { Project, Company, Contact, Currency } from './types';
 import { CompanyType } from './types';
 import { useData } from './context/DataContext';
 
-type View = 'dashboard' | 'pipeline';
+type View = 'dashboard' | 'pipeline' | 'companyInfo';
 
 interface AppProps {
     user: { name: string; initials: string };
@@ -87,6 +88,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
     const pageTitle = useMemo(() => {
         if (activeView === 'pipeline') return 'Project Pipeline';
+        if (activeView === 'companyInfo') return 'Company Info';
         return 'Dashboard';
     }, [activeView]);
 
@@ -130,6 +132,11 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                                 )?.first_name) || user.name.split(' ')[0] || user.name || ''
                             }
                         />
+                    </main>
+                )}
+                {activeView === 'companyInfo' && (
+                    <main className="flex-1 overflow-y-auto p-0">
+                        <CompanyInfoPage />
                     </main>
                 )}
                 {/* Slide-in Project Pipeline View */}
