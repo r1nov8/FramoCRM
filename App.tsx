@@ -141,50 +141,28 @@ const App: React.FC = () => {
                         <Dashboard userFirstName={teamMembers[0]?.first_name || ''} />
                     </main>
                 )}
-                {/* Slide-in Project List Sidebar only */}
-                <div className="relative flex-1 h-full">
-                    {/* Sidebar slides in from the left */}
-                    <div
-                        className={`fixed top-16 left-16 z-30 transition-transform duration-500 ease-in-out ${
-                            activeView === 'pipeline' ? 'translate-x-0' : '-translate-x-full pointer-events-none opacity-0'
-                        }`}
-                        style={{ height: 'calc(100vh - 4rem)', width: '220px' }}
-                    >
-                        <ProjectListSidebar
-                            projects={projects}
-                            teamMembers={teamMembers}
-                            selectedProjectId={selectedProjectId}
-                            onSelectProject={setSelectedProjectId}
-                            onAddProjectClick={() => setIsAddProjectModalOpen(true)}
-                        />
-                    </div>
-                    {/* Details area just appears, no animation */}
-                    {activeView === 'pipeline' && (
-                        <div className="absolute top-0 left-[236px] right-0 bottom-0 h-full">
-                            <main className="flex-1 p-6 overflow-y-auto h-full">
-                                {selectedProject ? (
-                                    <ProjectDetails
-                                        project={selectedProject}
-                                        companies={companies}
-                                        contacts={contacts}
-                                        teamMembers={teamMembers}
-                                        onEditProject={() => handleOpenEditModal(selectedProject)}
-                                        onUploadFiles={handleUploadFiles}
-                                        onDeleteFile={handleDeleteFile}
-                                        onOpenHPUSizing={() => setIsHPUSizingModalOpen(true)}
-                                        onOpenEstimateCalculator={() => setIsEstimateCalculatorOpen(true)}
-                                    />
-                                ) : (
-                                    <div className="flex items-center justify-center h-full">
-                                        <div className="text-center">
-                                            <h2 className="text-2xl font-semibold text-gray-500">No Project Selected</h2>
-                                            <p className="mt-2 text-gray-400">Please select a project from the list or add a new one.</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </main>
-                        </div>
-                    )}
+                {/* Slide-in Project Pipeline View */}
+                <div
+                    className={`fixed top-16 left-16 right-0 bottom-0 z-30 transition-transform duration-500 ease-in-out bg-gray-100 dark:bg-gray-900 shadow-xl border-l border-gray-200 dark:border-gray-700 ${
+                        activeView === 'pipeline' ? 'translate-x-0' : 'translate-x-full pointer-events-none opacity-0'
+                    } flex`}
+                    style={{ height: 'calc(100vh - 4rem)' }}
+                >
+                    <ProjectPipelineView
+                        projects={projects}
+                        companies={companies}
+                        contacts={contacts}
+                        teamMembers={teamMembers}
+                        selectedProjectId={selectedProjectId}
+                        onSelectProject={setSelectedProjectId}
+                        onAddProjectClick={() => setIsAddProjectModalOpen(true)}
+                        onEditProject={handleOpenEditModal}
+                        selectedProject={selectedProject}
+                        onUploadFiles={handleUploadFiles}
+                        onDeleteFile={handleDeleteFile}
+                        onOpenHPUSizing={() => setIsHPUSizingModalOpen(true)}
+                        onOpenEstimateCalculator={() => setIsEstimateCalculatorOpen(true)}
+                    />
                 </div>
             </div>
             {isAddProjectModalOpen && (
