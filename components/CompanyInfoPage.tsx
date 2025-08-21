@@ -130,7 +130,7 @@ const CompanyInfoPage: React.FC = () => {
     // Upload removed
 
     return (
-        <div className="flex flex-col h-full w-full m-0 p-0 bg-white dark:bg-gray-900">
+    <div className="flex flex-col h-full w-full m-0 p-0 bg-white dark:bg-gray-900" style={{ paddingLeft: 0 }}>
             {/* Top banner removed as requested */}
             <div className="flex-1 min-h-0 overflow-auto">
                 <CompanyInfoGrid

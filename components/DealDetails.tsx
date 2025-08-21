@@ -67,7 +67,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     const shipyard = findCompany(project.shipyardId);
     const vesselOwner = project.vesselOwnerId ? findCompany(project.vesselOwnerId) : undefined;
     const designCompany = project.designCompanyId ? findCompany(project.designCompanyId) : undefined;
-    const primaryContact = findContact(project.primaryContactId);
+    const primaryContact = project.primaryContactId ? findContact(project.primaryContactId) : undefined;
 
     const currentStageIndex = stageProgress[project.stage];
     const currencySymbol = getCurrencySymbol(project.currency);

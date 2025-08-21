@@ -37,7 +37,7 @@ const NavItem: React.FC<{
 
 export const IconSidebar: React.FC<IconSidebarProps> = ({ activeView, onNavigate }) => {
     return (
-        <nav className="flex flex-col items-center w-10 bg-gray-800 text-white z-20 flex-shrink-0 pt-2 h-full min-h-0 border-none">
+    <nav className="fixed top-0 left-0 bottom-0 flex flex-col items-center w-10 bg-gray-800 text-white z-20 pt-2 border-none">
             <button
                 onClick={() => onNavigate('dashboard')}
                 className={`flex flex-col items-center justify-center w-full p-2 focus:outline-none transition-colors duration-200 group ${activeView === 'dashboard' ? 'text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'}`}

@@ -74,8 +74,8 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            if (!projectName || !opportunityNumber || !salesRepId || !shipyardId || !primaryContactId || !currency) {
-                alert('Please fill in all required fields: Project Name, Opportunity No., Sales Rep, Shipyard, Primary Contact, and Currency.');
+            if (!projectName || !opportunityNumber || !salesRepId || !shipyardId || !currency) {
+                alert('Please fill in all required fields: Project Name, Opportunity No., Sales Rep, Shipyard, and Currency.');
                 return;
             }
             // Check for duplicate OPP number
@@ -108,7 +108,8 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                 shipyardId,
                 vesselOwnerId: vesselOwnerId || undefined,
                 designCompanyId: designCompanyId || undefined,
-                primaryContactId,
+                // Primary contact is optional
+                primaryContactId: primaryContactId || undefined,
                 products,
                 notes,
                 numberOfVessels,
@@ -367,9 +368,9 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                         onAddCompanyClick={() => onAddCompanyClick(CompanyType.SHIPYARD)}
                     />
                     <div>
-                        <label htmlFor="primaryContact" className={labelClass}>Primary Contact</label>
+                        <label htmlFor="primaryContact" className={labelClass}>Primary Contact (Optional)</label>
                         <div className="flex items-center space-x-2">
-                            <select id="primaryContact" value={primaryContactId} onChange={e => setPrimaryContactId(e.target.value)} className={inputClass} required>
+                            <select id="primaryContact" value={primaryContactId} onChange={e => setPrimaryContactId(e.target.value)} className={inputClass}>
                                 <option value="">Select Contact</option>
                                 {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>

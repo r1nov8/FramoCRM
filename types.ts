@@ -118,7 +118,7 @@ export interface Project {
     shipyardId: string;
     vesselOwnerId?: string;
     designCompanyId?: string;
-    primaryContactId: string;
+    primaryContactId?: string;
     products: Product[];
     notes: string;
     numberOfVessels: number;

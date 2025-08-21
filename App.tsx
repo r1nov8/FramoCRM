@@ -94,7 +94,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }, [activeView]);
 
     return (
-        <div className="flex h-screen font-sans bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-0">
+        <div className="flex h-screen font-sans bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-0" style={{ paddingLeft: 40 }}>
             <IconSidebar activeView={activeView} onNavigate={setActiveView} />
             <div className="flex flex-col flex-1 overflow-hidden pt-20"> {/* pt-20 for header height */}
                 <Header

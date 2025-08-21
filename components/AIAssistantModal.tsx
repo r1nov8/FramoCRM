@@ -67,7 +67,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
             let prompt = '';
             const shipyard = companies.find(c => c.id === project.shipyardId);
             const vesselOwner = project.vesselOwnerId ? companies.find(c => c.id === project.vesselOwnerId) : undefined;
-            const primaryContact = contacts.find(c => c.id === project.primaryContactId);
+            const primaryContact = project.primaryContactId ? contacts.find(c => c.id === project.primaryContactId) : undefined;
             const primaryContactCompany = primaryContact ? companies.find(c => c.id === primaryContact.companyId) : undefined;
             const salesRep = project.salesRepId ? teamMembers.find(tm => tm.id === project.salesRepId) : undefined;
 
