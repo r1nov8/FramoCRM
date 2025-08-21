@@ -5,13 +5,23 @@ CREATE TABLE IF NOT EXISTS users (
   password VARCHAR(255) NOT NULL
 );
 
--- Companies table
+-- Companies table (CSV-aligned schema)
 CREATE TABLE IF NOT EXISTS companies (
   id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  type VARCHAR(50) NOT NULL,
-  location VARCHAR(255)
+  "Company" TEXT,
+  "Vessels" TEXT,
+  "Company Nationality/Region" TEXT,
+  "Company Primary Activity - Level 1" TEXT,
+  "Company City" TEXT,
+  "Company Size" TEXT,
+  "Company Main Vessel Type" TEXT,
+  "Company Website" TEXT,
+  "Company Email Address" TEXT,
+  "Group Company" TEXT,
+  "Company Tel Number" TEXT
 );
+-- Unique index on lower("Company") to enforce case-insensitive uniqueness when present
+CREATE UNIQUE INDEX IF NOT EXISTS companies_company_lower_idx ON companies ((lower("Company")));
 
 -- Contacts table
 CREATE TABLE IF NOT EXISTS contacts (

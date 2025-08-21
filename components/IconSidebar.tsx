@@ -1,7 +1,9 @@
 import React from 'react';
 import { SearchIcon, LayoutGridIcon, NewspaperIcon } from './icons';
+import { FileIcon } from './icons';
 
 type View = 'dashboard' | 'pipeline' | 'companyInfo';
+type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files';
 
 interface IconSidebarProps {
     activeView: View;
@@ -65,6 +67,13 @@ export const IconSidebar: React.FC<IconSidebarProps> = ({ activeView, onNavigate
                     onClick={() => onNavigate('companyInfo')}
                     ariaLabel="Company Info"
                     title="Company Info"
+                />
+                <NavItem
+                    icon={<FileIcon className="w-5 h-5" />}
+                    isActive={activeView === 'files'}
+                    onClick={() => onNavigate('files')}
+                    ariaLabel="Files"
+                    title="Files"
                 />
             </div>
         </nav>

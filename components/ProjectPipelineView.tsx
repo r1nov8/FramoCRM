@@ -34,6 +34,8 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
     onOpenHPUSizing,
     onOpenEstimateCalculator,
 }) => {
+    // Import UI removed as part of rollback
+
     return (
         <div className="flex flex-1 h-full min-h-0 items-stretch">
             <ProjectListSidebar

@@ -1,24 +1,3 @@
-    const handleUpdateTeamMember = async (member: TeamMember) => {
-        try {
-            const res = await fetch(`${API_URL}/api/team-members/${member.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    first_name: member.first_name,
-                    last_name: member.last_name,
-                    initials: member.initials,
-                    jobTitle: member.jobTitle
-                })
-            });
-            if (!res.ok) throw new Error('Failed to update team member');
-            const updated = await res.json();
-            // Map job_title to jobTitle for frontend
-            const updatedMember = { ...updated, jobTitle: updated.job_title };
-            setTeamMembers(prev => prev.map(m => m.id === updatedMember.id ? updatedMember : m));
-        } catch (err) {
-            console.error('Update team member error:', err);
-        }
-    };
 import { useState, useEffect } from 'react';
 
 // Helper to get API URL from env or fallback
@@ -78,45 +57,50 @@ export const useCrmData = () => {
         }
     };
 
-    // Fetch companies from backend
-    useEffect(() => {
-        fetch(`${API_URL}/api/companies`)
-            .then(res => res.json())
-            .then(data => setCompanies(data))
-            .catch(err => {
-                console.error('Failed to fetch companies:', err);
-                setCompanies([]);
-            });
-    }, []);
+    // Backend fetch helpers we can reuse for reloads
+    const fetchCompanies = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/companies`);
+            const data = await res.json();
+            setCompanies(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Failed to fetch companies:', err);
+            setCompanies([]);
+        }
+    };
 
-    // Fetch contacts from backend
-    useEffect(() => {
-        fetch(`${API_URL}/api/contacts`)
-            .then(res => res.json())
-            .then(data => setContacts(data))
-            .catch(err => {
-                console.error('Failed to fetch contacts:', err);
-                setContacts([]);
-            });
-    }, []);
+    const fetchContacts = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/contacts`);
+            const data = await res.json();
+            setContacts(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Failed to fetch contacts:', err);
+            setContacts([]);
+        }
+    };
 
-    // Fetch team members from backend
-    useEffect(() => {
-        fetch(`${API_URL}/api/team-members`)
-            .then(res => res.json())
-            .then(data => {
-                // Map job_title to jobTitle for frontend
-                setTeamMembers(data.map((m: any) => ({
-                    ...m,
-                    jobTitle: m.job_title,
-                    name: `${m.first_name} ${m.last_name}`
-                })));
-            })
-            .catch(err => {
-                console.error('Failed to fetch team members:', err);
-                setTeamMembers([]);
-            });
-    }, []);
+    const fetchTeamMembers = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/team-members`);
+            const data = await res.json();
+            setTeamMembers((Array.isArray(data) ? data : []).map((m: any) => ({
+                ...m,
+                jobTitle: m.job_title,
+                name: `${m.first_name} ${m.last_name}`
+            })));
+        } catch (err) {
+            console.error('Failed to fetch team members:', err);
+            setTeamMembers([]);
+        }
+    };
+
+    // Initial loads
+    useEffect(() => { fetchCompanies(); }, []);
+
+    useEffect(() => { fetchContacts(); }, []);
+
+    useEffect(() => { fetchTeamMembers(); }, []);
 
     // Ensure selectedProjectId is valid if projects change
     useEffect(() => {
@@ -264,6 +248,58 @@ export const useCrmData = () => {
         }
     };
 
+    // Create company with minimal CSV-aligned fields supported by backend POST
+    const handleCreateCompanySimple = async (payload: { name: string; type?: string; location?: string; address?: string; website?: string; }) => {
+        try {
+            if (!payload?.name) throw new Error('Name is required');
+            const res = await fetch(`${API_URL}/api/companies`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('Failed to add company');
+            const created = await res.json();
+            setCompanies(prev => [created, ...prev]);
+            return created;
+        } catch (err) {
+            console.error('Create company error:', err);
+            throw err;
+        }
+    };
+
+    // Update company; accepts partial body with CSV column names or compat names, and id
+    const handleUpdateCompany = async (update: any) => {
+        try {
+            const id = update?.id;
+            if (!id) throw new Error('Missing company id');
+            const body = { ...update };
+            delete body.id;
+            const res = await fetch(`${API_URL}/api/companies/${id}` , {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) throw new Error('Failed to update company');
+            const updated = await res.json();
+            setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
+            return updated;
+        } catch (err) {
+            console.error('Update company error:', err);
+            throw err;
+        }
+    };
+
+    const handleDeleteCompany = async (id: string | number) => {
+        try {
+            const res = await fetch(`${API_URL}/api/companies/${id}`, { method: 'DELETE' });
+            if (!res.ok && res.status !== 204) throw new Error('Failed to delete company');
+            setCompanies(prev => prev.filter(c => c.id !== id));
+        } catch (err) {
+            console.error('Delete company error:', err);
+            throw err;
+        }
+    };
+
 
     const handleAddContact = async (newContact: Omit<Contact, 'id'>) => {
         try {
@@ -363,12 +399,19 @@ export const useCrmData = () => {
         handleAddProject,
         handleUpdateProject,
         handleAddCompany,
+    handleCreateCompanySimple,
+    handleUpdateCompany,
+    handleDeleteCompany,
         handleAddContact,
         handleAddTeamMember,
         handleUpdateTeamMember,
         handleDeleteTeamMember,
         handleUploadFiles,
         handleDeleteFile,
-        handleUpdateProjectPrice
+    handleUpdateProjectPrice,
+    // Expose reload helpers for components to refresh after imports, etc.
+    reloadCompanies: fetchCompanies,
+    reloadContacts: fetchContacts,
+    reloadTeamMembers: fetchTeamMembers
     };
 };

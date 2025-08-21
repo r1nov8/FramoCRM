@@ -7,6 +7,7 @@ import React, { useState, useMemo } from 'react';
 import { Header } from './components/Header';
 import { ExitDoorIcon, UsersIcon } from './components/icons';
 import { IconSidebar } from './components/IconSidebar';
+import FilesBrowser from './components/FilesBrowser';
 import { Dashboard } from './components/Dashboard';
 import { ProjectPipelineView } from './components/ProjectPipelineView';
 import CompanyInfoPage from './components/CompanyInfoPage';
@@ -21,7 +22,7 @@ import type { Project, Company, Contact, Currency } from './types';
 import { CompanyType } from './types';
 import { useData } from './context/DataContext';
 
-type View = 'dashboard' | 'pipeline' | 'companyInfo';
+type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files';
 
 interface AppProps {
     user: { name: string; initials: string };
@@ -137,6 +138,11 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 {activeView === 'companyInfo' && (
                     <main className="flex-1 overflow-y-auto p-0">
                         <CompanyInfoPage />
+                    </main>
+                )}
+                {activeView === 'files' && (
+                    <main className="flex-1 overflow-y-auto p-0">
+                        <FilesBrowser />
                     </main>
                 )}
                 {/* Slide-in Project Pipeline View */}

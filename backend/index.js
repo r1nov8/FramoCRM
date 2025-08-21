@@ -4,18 +4,49 @@ import dotenv from 'dotenv';
 import pkg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import path from 'path';
+import fs from 'fs';
+import { promises as fsp } from 'fs';
+// CSV import removed
+import { fileURLToPath } from 'url';
+// Excel import dependencies removed as part of rollback
 
 const { Pool } = pkg;
 dotenv.config();
+
+// ESM-compatible __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
 
-const allowedOrigins = [
-  'https://framocrm-1.onrender.com',
-  'http://localhost:5173'
-];
+// Filesystem root for corporate file shares (e.g., G:\\ on Framo servers)
+// Configure via FILE_SHARE_ROOT or G_DRIVE_PATH. In dev, defaults to ./files
+const FILE_SHARE_ROOT = process.env.FILE_SHARE_ROOT
+  || process.env.G_DRIVE_PATH
+  || (process.platform === 'win32' ? 'G:\\' : path.resolve(process.cwd(), 'files'));
+const FILES_ENABLED = process.env.FILES_ENABLED === 'true';
+
+// Create local dev directory if using default and not on Windows
+if (!process.env.FILE_SHARE_ROOT && !process.env.G_DRIVE_PATH && process.platform !== 'win32') {
+  try {
+    if (!fs.existsSync(FILE_SHARE_ROOT)) {
+      fs.mkdirSync(FILE_SHARE_ROOT, { recursive: true });
+    }
+  } catch (e) {
+    // non-fatal
+  }
+}
+
+const allowedOrigins = (process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+  : [
+      'https://framocrm-1.onrender.com',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+    ]);
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -29,12 +60,54 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+// Increase payload limit to support larger CSV uploads wrapped in JSON
+app.use(express.json({ limit: '25mb' }));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://crmuser:crmpassword@localhost:5432/crmdb',
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
+
+// --- Filesystem helpers (secure path resolution) ---
+function resolveSafe(base, ...segments) {
+  const resolvedBase = path.resolve(base);
+  const full = path.resolve(resolvedBase, ...segments);
+  if (!full.startsWith(resolvedBase)) {
+    const err = new Error('Invalid path');
+    err.status = 400;
+    throw err;
+  }
+  return full;
+}
+
+function isTextExtension(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const textExts = new Set([
+    '.txt','.md','.csv','.json','.log','.ts','.tsx','.js','.jsx','.css','.scss','.html','.xml','.yml','.yaml','.sql'
+  ]);
+  return textExts.has(ext);
+}
+
+async function listDirectory(dir) {
+  const entries = await fsp.readdir(dir, { withFileTypes: true });
+  const result = [];
+  for (const d of entries) {
+    const fp = path.join(dir, d.name);
+    try {
+      const st = await fsp.stat(fp);
+      result.push({
+        name: d.name,
+        path: fp,
+        isDir: d.isDirectory(),
+        size: st.size,
+        mtime: st.mtimeMs,
+      });
+    } catch {
+      // skip unreadable entries
+    }
+  }
+  return result;
+}
 
 // --- Auth endpoints ---
 // Register
@@ -93,6 +166,54 @@ function requireAuth(req, res, next) {
 
 // --- Example CRUD endpoints ---
 
+// Excel import endpoint removed as part of rollback
+
+// --- File share integration (read-only) ---
+if (FILES_ENABLED) {
+  // List directory contents under FILE_SHARE_ROOT
+  app.get('/api/files', requireAuth, async (req, res) => {
+    try {
+      const rel = req.query.path || '';
+      const abs = resolveSafe(FILE_SHARE_ROOT, rel);
+      const st = await fsp.stat(abs);
+      if (!st.isDirectory()) return res.status(400).json({ error: 'Not a directory' });
+      const items = await listDirectory(abs);
+      // Return relative paths from root to avoid leaking absolute mount information
+      const rootAbs = path.resolve(FILE_SHARE_ROOT);
+      const data = items.map(i => ({
+        name: i.name,
+        isDir: i.isDir,
+        size: i.size,
+        mtime: i.mtime,
+        relPath: path.relative(rootAbs, i.path)
+      }));
+      res.json({ root: path.basename(rootAbs) || rootAbs, path: rel, items: data });
+    } catch (err) {
+      console.error('List files error:', err);
+      res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+    }
+  });
+
+  // Read a small text file (preview)
+  app.get('/api/file', requireAuth, async (req, res) => {
+    try {
+      const rel = req.query.path;
+      if (!rel) return res.status(400).json({ error: 'Missing path' });
+      const abs = resolveSafe(FILE_SHARE_ROOT, rel);
+      const st = await fsp.stat(abs);
+      if (st.isDirectory()) return res.status(400).json({ error: 'Path is a directory' });
+      if (!isTextExtension(abs) || st.size > 2 * 1024 * 1024) {
+        return res.status(415).json({ error: 'Unsupported file type or too large' });
+      }
+      const content = await fsp.readFile(abs, 'utf8');
+      res.json({ path: rel, size: st.size, content });
+    } catch (err) {
+      console.error('Read file error:', err);
+      res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+    }
+  });
+}
+
 // Get all projects
 app.get('/api/projects', async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM projects ORDER BY id DESC');
@@ -125,7 +246,16 @@ app.get('/api/team-members', async (req, res) => {
 // --- Companies CRUD Endpoints ---
 app.get('/api/companies', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM companies ORDER BY id DESC');
+    // Return CSV-aligned aliases for UI plus all raw columns
+    const { rows } = await pool.query(
+      'SELECT companies.*, ' +
+      '"Company" as name, ' +
+      '"Company Primary Activity - Level 1" as type, ' +
+      '"Company Nationality/Region" as location, ' +
+      '"Company Website" as website, ' +
+      '"Company City" as address ' +
+      'FROM companies ORDER BY id DESC'
+    );
     res.json(rows);
   } catch (err) {
     console.error('Get companies error:', err);
@@ -135,11 +265,25 @@ app.get('/api/companies', async (req, res) => {
 
 app.post('/api/companies', async (req, res) => {
   try {
-    const { name, type, location } = req.body;
-    if (!name || !type) return res.status(400).json({ error: 'Missing fields' });
+    const { name, type, location, address, website } = req.body;
+    if (!name) return res.status(400).json({ error: 'Missing name' });
+    // Map to CSV-aligned columns. Address approximates to "Company City" if provided.
+    const company = String(name).trim();
+    const activity = type ? String(type).trim() : null;
+    const nationality = location ? String(location).trim() : null;
+    const city = address ? String(address).trim() : null;
+    const site = website ? String(website).trim() : null;
+    const insertCols = ['Company'];
+    const values = [company];
+    if (activity) { insertCols.push('Company Primary Activity - Level 1'); values.push(activity); }
+    if (nationality) { insertCols.push('Company Nationality/Region'); values.push(nationality); }
+    if (city) { insertCols.push('Company City'); values.push(city); }
+    if (site) { insertCols.push('Company Website'); values.push(site); }
+    const placeholders = insertCols.map((_, i) => `$${i + 1}`);
+    const quotedCols = insertCols.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
     const { rows } = await pool.query(
-      'INSERT INTO companies (name, type, location) VALUES ($1, $2, $3) RETURNING *',
-      [name, type, location]
+      `INSERT INTO companies (${quotedCols}) VALUES (${placeholders.join(', ')}) RETURNING *`,
+      values
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -151,10 +295,45 @@ app.post('/api/companies', async (req, res) => {
 app.put('/api/companies/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, type, location } = req.body;
+    const body = req.body || {};
+    const csvCols = [
+      'Company',
+      'Vessels',
+      'Company Nationality/Region',
+      'Company Primary Activity - Level 1',
+      'Company City',
+      'Company Size',
+      'Company Main Vessel Type',
+      'Company Website',
+      'Company Email Address',
+      'Group Company',
+      'Company Tel Number'
+    ];
+    // Backward-compatible mapping
+    const compat = {
+      name: 'Company',
+      type: 'Company Primary Activity - Level 1',
+      location: 'Company Nationality/Region',
+      address: 'Company City',
+      website: 'Company Website'
+    };
+    const updates = [];
+    const values = [];
+    for (const [k, v] of Object.entries(body)) {
+      let col = null;
+      if (csvCols.includes(k)) col = k;
+      else if (compat[k]) col = compat[k];
+      if (col && v !== undefined) {
+        const q = '"' + col.replace(/"/g, '""') + '" = $' + (values.length + 1);
+        updates.push(q);
+        values.push(v);
+      }
+    }
+    if (!updates.length) return res.status(400).json({ error: 'No updatable fields provided' });
+    values.push(id);
     const { rows } = await pool.query(
-      'UPDATE companies SET name = $1, type = $2, location = $3 WHERE id = $4 RETURNING *',
-      [name, type, location, id]
+      `UPDATE companies SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
@@ -163,6 +342,8 @@ app.put('/api/companies/:id', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// CSV import endpoint removed
 
 app.delete('/api/companies/:id', async (req, res) => {
   try {

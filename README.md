@@ -18,6 +18,22 @@ View your app in AI Studio: https://ai.studio/apps/drive/1LU0H7WJrzGpVFUX0ljk_jv
 3. Run the app:
    `npm run dev`
 
+## File Share (Framo G:\\) Integration
+
+The backend can read from a corporate file share (e.g., G:\\ on Windows servers). Configure one of these env vars for the backend:
+
+- `FILE_SHARE_ROOT` absolute path to the share root (preferred)
+- `G_DRIVE_PATH` alternative variable name for compatibility
+
+If unset, development defaults to `./backend/files` on non-Windows and `G:\\` on Windows. Endpoints:
+
+- `GET /api/files?path=relative/subdir` list directory contents (auth required)
+- `GET /api/file?path=relative/file.txt` read small text files (<=2MB)
+
+Security: paths are resolved safely under the configured root; only read operations are supported by default.
+
+Note: The previously prototyped Excel import feature has been rolled back and is not available in this build.
+
 ## Deploy to Render (Cloud)
 
 1. Push your code to GitHub.

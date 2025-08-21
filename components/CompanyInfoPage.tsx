@@ -1,30 +1,49 @@
 
 import { useData } from '../context/DataContext';
 import React, { useState, useRef } from 'react';
+import { PlusIcon, PencilIcon, TrashIcon } from './icons';
 
 const CompanyInfoPage: React.FC = () => {
 
-    const { companies, projects, contacts } = useData();
+    const { companies, reloadCompanies, handleCreateCompanySimple, handleUpdateCompany, handleDeleteCompany } = useData() as any;
+    // CSV upload removed (one-time import is no longer part of the app)
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
     const [editing, setEditing] = useState<{ id: string; field: EditableField } | null>(null);
     const [editValue, setEditValue] = useState<string>('');
     const [selected, setSelected] = useState<{ [id: string]: boolean }>({});
 
-    // TODO: Replace with real update logic (API call, context update)
-    const { handleUpdateCompany } = useData() as any;
+    // Add form state
+    const [showAdd, setShowAdd] = useState(false);
+    const [addForm, setAddForm] = useState<{ name: string; type?: string; location?: string; address?: string; website?: string }>({ name: '' });
 
 
-    type EditableField = 'id' | 'name' | 'type' | 'location' | 'address' | 'website';
+    type EditableField =
+        | 'Company'
+        | 'Vessels'
+        | 'Company Nationality/Region'
+        | 'Company Primary Activity - Level 1'
+        | 'Company City'
+        | 'Company Size'
+        | 'Company Main Vessel Type'
+        | 'Company Website'
+        | 'Company Email Address'
+        | 'Group Company'
+        | 'Company Tel Number';
 
     // Resizable columns state
     // Excel-like: columns start as 'auto', user can resize to any width
     const [colWidths, setColWidths] = useState<{ [key: string]: number | undefined }>({
-        name: undefined,
-        type: undefined,
-        location: undefined,
-        address: undefined,
-        website: undefined,
-        previousOrders: undefined,
-        vessels: undefined,
+        'Company': undefined,
+        'Vessels': undefined,
+        'Company Nationality/Region': undefined,
+        'Company Primary Activity - Level 1': undefined,
+        'Company City': undefined,
+        'Company Size': undefined,
+        'Company Main Vessel Type': undefined,
+        'Company Website': undefined,
+        'Company Email Address': undefined,
+        'Group Company': undefined,
+        'Company Tel Number': undefined,
     });
     const resizingCol = useRef<string | null>(null);
     const startX = useRef<number>(0);
@@ -61,7 +80,7 @@ const CompanyInfoPage: React.FC = () => {
             return;
         }
         // Call update handler (should update backend and context)
-        await handleUpdateCompany({ ...company, [editing.field]: editValue });
+        await handleUpdateCompany({ id: company.id, [editing.field]: editValue });
         setEditing(null);
     };
 
@@ -73,162 +92,197 @@ const CompanyInfoPage: React.FC = () => {
         }
     };
 
+    // Upload removed
+
     return (
         <div className="flex flex-col h-full w-full m-0 p-0 bg-white dark:bg-gray-900">
+            {/* CSV upload UI removed; one-time import handled by backend/scripts/import_companies_csv.js */}
+            <div className="flex items-center justify-between px-3 py-2 border-b border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300">
+                <span>{Array.isArray(companies) ? `${companies.length} rows` : 'No data'}</span>
+                <button onClick={reloadCompanies} className="px-2 py-1 border border-primary-200 dark:border-gray-600 rounded hover:bg-primary-100 dark:hover:bg-gray-700">Reload</button>
+            </div>
             <div className="flex-1 overflow-x-auto m-0 p-0" style={{maxHeight: 'calc(100vh - 6rem)'}}>
                 <table className="min-w-full w-full border-separate border-spacing-0 select-none table-fixed text-[13px]" style={{ fontFamily: 'Inter, Menlo, Monaco, Consolas, monospace', borderCollapse: 'separate' }}>
                     <colgroup>
-                        <col style={{ width: 80 }} /> {/* ID */}
-                        <col style={colWidths.name ? { width: colWidths.name } : {}} />
-                        <col style={colWidths.type ? { width: colWidths.type } : {}} />
-                        <col style={colWidths.location ? { width: colWidths.location } : {}} />
-                        <col style={colWidths.address ? { width: colWidths.address } : {}} />
-                        <col style={colWidths.website ? { width: colWidths.website } : {}} />
-                        <col style={{ width: 80 }} /> {/* Projects count */}
-                        <col style={colWidths.previousOrders ? { width: colWidths.previousOrders } : {}} /> {/* Previous Orders count */}
-                        <col style={colWidths.vessels ? { width: colWidths.vessels } : {}} /> {/* No. Vessels */}
-                        <col style={{ width: 80 }} /> {/* Contacts count */}
+                        {[
+                            <col key="col-company" style={colWidths['Company'] ? { width: colWidths['Company'] } : {}} />,
+                            <col key="col-vessels" style={colWidths['Vessels'] ? { width: colWidths['Vessels'] } : {}} />,
+                            <col key="col-nationality" style={colWidths['Company Nationality/Region'] ? { width: colWidths['Company Nationality/Region'] } : {}} />,
+                            <col key="col-activity" style={colWidths['Company Primary Activity - Level 1'] ? { width: colWidths['Company Primary Activity - Level 1'] } : {}} />,
+                            <col key="col-city" style={colWidths['Company City'] ? { width: colWidths['Company City'] } : {}} />,
+                            <col key="col-size" style={colWidths['Company Size'] ? { width: colWidths['Company Size'] } : {}} />,
+                            <col key="col-vessel-type" style={colWidths['Company Main Vessel Type'] ? { width: colWidths['Company Main Vessel Type'] } : {}} />,
+                            <col key="col-website" style={colWidths['Company Website'] ? { width: colWidths['Company Website'] } : {}} />,
+                            <col key="col-email" style={colWidths['Company Email Address'] ? { width: colWidths['Company Email Address'] } : {}} />,
+                            <col key="col-group" style={colWidths['Group Company'] ? { width: colWidths['Group Company'] } : {}} />,
+                            <col key="col-tel" style={colWidths['Company Tel Number'] ? { width: colWidths['Company Tel Number'] } : {}} />
+                        ]}
                     </colgroup>
                     <thead className="bg-primary-50 dark:bg-gray-800 sticky top-0 z-10">
                         <tr>
-                            <th className="border-b border-r border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-left px-2 whitespace-nowrap group relative select-none" style={{ minWidth: 60 }}>
-                                ID
-                            </th>
-                            <th className="border-b border-r border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-left px-2 whitespace-nowrap group relative select-none" style={{ minWidth: 80 }}>
-                                Company Name
-                                <span className="absolute right-0 top-0 h-full w-2 cursor-col-resize group-hover:bg-primary-100/30 dark:group-hover:bg-gray-700/30" onMouseDown={e => handleResizeStart('name', e)} style={{ zIndex: 30 }} />
-                            </th>
-                            <th className="border-b border-r border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-left px-2 whitespace-nowrap group relative select-none" style={{ minWidth: 80 }}>
-                                Company Type
-                                <span className="absolute right-0 top-0 h-full w-2 cursor-col-resize group-hover:bg-primary-100/30 dark:group-hover:bg-gray-700/30" onMouseDown={e => handleResizeStart('type', e)} style={{ zIndex: 30 }} />
-                            </th>
-                            <th className="border-b border-r border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-left px-2 whitespace-nowrap group relative select-none" style={{ minWidth: 80 }}>
-                                Country
-                                <span className="absolute right-0 top-0 h-full w-2 cursor-col-resize group-hover:bg-primary-100/30 dark:group-hover:bg-gray-700/30" onMouseDown={e => handleResizeStart('location', e)} style={{ zIndex: 30 }} />
-                            </th>
-                            <th className="border-b border-r border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-left px-2 whitespace-nowrap group relative select-none" style={{ minWidth: 80 }}>
-                                Address
-                                <span className="absolute right-0 top-0 h-full w-2 cursor-col-resize group-hover:bg-primary-100/30 dark:group-hover:bg-gray-700/30" onMouseDown={e => handleResizeStart('address', e)} style={{ zIndex: 30 }} />
-                            </th>
-                            <th className="border-b border-r border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-left px-2 whitespace-nowrap group relative select-none" style={{ minWidth: 80 }}>
-                                Website
-                                <span className="absolute right-0 top-0 h-full w-2 cursor-col-resize group-hover:bg-primary-100/30 dark:group-hover:bg-gray-700/30" onMouseDown={e => handleResizeStart('website', e)} style={{ zIndex: 30 }} />
-                            </th>
-                            <th className="border-b border-r border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-center px-2 whitespace-nowrap">Projects</th>
-                            <th className="border-b border-r border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-center px-2 whitespace-nowrap group relative select-none">
-                                Previous Orders
-                                <span className="absolute right-0 top-0 h-full w-2 cursor-col-resize group-hover:bg-primary-100/30 dark:group-hover:bg-gray-700/30" onMouseDown={e => handleResizeStart('previousOrders', e)} style={{ zIndex: 30 }} />
-                            </th>
-                            <th className="border-b border-r border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-center px-2 whitespace-nowrap group relative select-none">
-                                No. Vessels
-                                <span className="absolute right-0 top-0 h-full w-2 cursor-col-resize group-hover:bg-primary-100/30 dark:group-hover:bg-gray-700/30" onMouseDown={e => handleResizeStart('vessels', e)} style={{ zIndex: 30 }} />
-                            </th>
-                            <th className="border-b border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-center px-2 whitespace-nowrap">Contacts</th>
+                            {[
+                                { key: 'Company', label: 'Company' },
+                                { key: 'Vessels', label: 'Vessels' },
+                                { key: 'Company Nationality/Region', label: 'Company Nationality/Region' },
+                                { key: 'Company Primary Activity - Level 1', label: 'Company Primary Activity - Level 1' },
+                                { key: 'Company City', label: 'Company City' },
+                                { key: 'Company Size', label: 'Company Size' },
+                                { key: 'Company Main Vessel Type', label: 'Company Main Vessel Type' },
+                                { key: 'Company Website', label: 'Company Website' },
+                                { key: 'Company Email Address', label: 'Company Email Address' },
+                                { key: 'Group Company', label: 'Group Company' },
+                                { key: 'Company Tel Number', label: 'Company Tel Number' },
+                            ].map(col => (
+                                <th key={col.key} className="border-b border-r last:border-r-0 border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 font-semibold text-left px-2 whitespace-nowrap group relative select-none" style={{ minWidth: 80 }}>
+                                    {col.label}
+                                    <span className="absolute right-0 top-0 h-full w-2 cursor-col-resize group-hover:bg-primary-100/30 dark:group-hover:bg-gray-700/30" onMouseDown={e => handleResizeStart(col.key, e)} style={{ zIndex: 30 }} />
+                                </th>
+                            ))}
                         </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-900">
-                        {companies.map((company) => {
-                            // Count unique opportunity numbers for projects tied to this company name
-                            const oppNos = new Set(
-                                projects.filter(p => {
-                                    const companyNames = [p.shipyardId, p.vesselOwnerId, p.designCompanyId]
-                                        .map(id => companies.find(c => c.id === id)?.name)
-                                        .filter(Boolean);
-                                    return companyNames.includes(company.name);
-                                }).map(p => p.opportunityNumber)
-                            );
-                            const projectCount = oppNos.size;
-
-                            // Count unique order numbers for projects tied to this company name
-                            const orderNos = new Set(
-                                projects.filter(p => {
-                                    const companyNames = [p.shipyardId, p.vesselOwnerId, p.designCompanyId]
-                                        .map(id => companies.find(c => c.id === id)?.name)
-                                        .filter(Boolean);
-                                    return companyNames.includes(company.name);
-                                }).map(p => p.orderNumber).filter(Boolean)
-                            );
-                            const previousOrderCount = orderNos.size;
-
-                            // Sum numberOfVessels for all projects tied to this company name
-                            const vesselsSum = projects.filter(p => {
-                                const companyNames = [p.shipyardId, p.vesselOwnerId, p.designCompanyId]
-                                    .map(id => companies.find(c => c.id === id)?.name)
-                                    .filter(Boolean);
-                                return companyNames.includes(company.name);
-                            }).reduce((sum, p) => sum + (p.numberOfVessels || 0), 0);
-                            const contactCount = contacts.filter(c => c.companyId === company.id).length;
-                            return (
-                                <tr key={company.id} className="hover:bg-primary-50 dark:hover:bg-gray-800 transition-colors">
-                                    <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 font-mono text-xs text-gray-500 dark:text-gray-400 cursor-pointer" title={company.id} onClick={() => startEdit(company.id, 'id', company.id)}>
-                                        {editing && editing.id === company.id && editing.field === 'id' ? (
-                                            <input className="w-full bg-transparent border-b border-primary-400 focus:outline-none text-gray-900 dark:text-gray-100 font-mono text-[13px]" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={() => saveEdit(company)} onKeyDown={e => handleKeyDown(e, company)} />
-                                        ) : (
-                                            company.id
-                                        )}
-                                    </td>
-                                    <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 text-gray-900 dark:text-gray-100 font-normal cursor-pointer truncate max-w-[220px]" title={company.name} onClick={() => startEdit(company.id, 'name', company.name)}>
-                                        {editing && editing.id === company.id && editing.field === 'name' ? (
-                                            <input className="w-full bg-transparent border-b border-primary-400 focus:outline-none text-gray-900 dark:text-gray-100 font-mono text-[13px]" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={() => saveEdit(company)} onKeyDown={e => handleKeyDown(e, company)} />
-                                        ) : (
-                                            company.name
-                                        )}
-                                    </td>
-                                    <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 cursor-pointer" onClick={() => startEdit(company.id, 'type', company.type)}>
-                                        {editing && editing.id === company.id && editing.field === 'type' ? (
-                                            <input className="w-full bg-transparent border-b border-primary-400 focus:outline-none text-gray-900 dark:text-gray-100 font-mono text-[13px]" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={() => saveEdit(company)} onKeyDown={e => handleKeyDown(e, company)} />
-                                        ) : (
-                                            <span className={
-                                                company.type === 'Shipping' ? 'bg-primary-600 text-white px-2 py-0.5 rounded-full text-xs font-semibold' :
-                                                company.type === 'Shipyard' ? 'bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-semibold' :
-                                                'bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs font-semibold'
-                                            }>{company.type}</span>
-                                        )}
-                                    </td>
-                                    <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 cursor-pointer truncate max-w-[120px]" title={company.location} onClick={() => startEdit(company.id, 'location', company.location)}>
-                                        {editing && editing.id === company.id && editing.field === 'location' ? (
-                                            <input className="w-full bg-transparent border-b border-primary-400 focus:outline-none text-gray-900 dark:text-gray-100 font-mono text-[13px]" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={() => saveEdit(company)} onKeyDown={e => handleKeyDown(e, company)} />
-                                        ) : (
-                                            company.location
-                                        )}
-                                    </td>
-                                    <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 cursor-pointer truncate max-w-[160px]" title={company.address} onClick={() => startEdit(company.id, 'address', company.address)}>
-                                        {editing && editing.id === company.id && editing.field === 'address' ? (
-                                            <input className="w-full bg-transparent border-b border-primary-400 focus:outline-none text-gray-900 dark:text-gray-100 font-mono text-[13px]" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={() => saveEdit(company)} onKeyDown={e => handleKeyDown(e, company)} />
-                                        ) : (
-                                            company.address
-                                        )}
-                                    </td>
-                                    <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 cursor-pointer truncate max-w-[160px] text-primary-700 dark:text-blue-300 underline" title={company.website} onClick={() => startEdit(company.id, 'website', company.website)}>
-                                        {editing && editing.id === company.id && editing.field === 'website' ? (
-                                            <input className="w-full bg-transparent border-b border-primary-400 focus:outline-none text-gray-900 dark:text-gray-100 font-mono text-[13px]" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={() => saveEdit(company)} onKeyDown={e => handleKeyDown(e, company)} />
-                                        ) : (
-                                            company.website ? <a href={company.website} target="_blank" rel="noopener noreferrer" className="hover:underline">{company.website.length > 30 ? company.website.slice(0, 28) + '…' : company.website}</a> : ''
-                                        )}
-                                    </td>
-                                    <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 text-center text-primary-700 dark:text-blue-300 font-semibold cursor-pointer hover:underline" title="View projects" onClick={() => {/* TODO: navigate to filtered projects */}}>
-                                        {projectCount}
-                                    </td>
-                                    <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 text-center text-primary-700 dark:text-blue-300 font-semibold cursor-pointer" title="View previous orders">
-                                        {previousOrderCount}
-                                    </td>
-                                    <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 text-center text-primary-700 dark:text-blue-300 font-semibold cursor-pointer" title="Total vessels for all projects">
-                                        {vesselsSum}
-                                    </td>
-                                    <td className="border-b border-primary-200 dark:border-gray-700 px-2 py-1 text-center text-primary-700 dark:text-blue-300 font-semibold cursor-pointer hover:underline" title="View contacts" onClick={() => {/* TODO: navigate to filtered contacts */}}>
-                                        {contactCount}
-                                    </td>
-                                </tr>
-                            );
-                        })}
+            {companies.map((company: any) => (
+                            <tr key={company.id || company['Company']} className={"hover:bg-primary-50 dark:hover:bg-gray-800 transition-colors " + (selected[company.id] ? 'bg-primary-50/60 dark:bg-gray-800/60' : '')} onClick={() => setSelected(s => ({ ...s, [company.id]: !s[company.id] }))}>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Company']} onDoubleClick={()=>startEdit(String(company.id), 'Company', company['Company'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Company' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Company']
+                                    )}
+                                </td>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Vessels']} onDoubleClick={()=>startEdit(String(company.id), 'Vessels', company['Vessels'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Vessels' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Vessels']
+                                    )}
+                                </td>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Company Nationality/Region']} onDoubleClick={()=>startEdit(String(company.id), 'Company Nationality/Region', company['Company Nationality/Region'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Company Nationality/Region' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Company Nationality/Region']
+                                    )}
+                                </td>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Company Primary Activity - Level 1']} onDoubleClick={()=>startEdit(String(company.id), 'Company Primary Activity - Level 1', company['Company Primary Activity - Level 1'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Company Primary Activity - Level 1' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Company Primary Activity - Level 1']
+                                    )}
+                                </td>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Company City']} onDoubleClick={()=>startEdit(String(company.id), 'Company City', company['Company City'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Company City' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Company City']
+                                    )}
+                                </td>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Company Size']} onDoubleClick={()=>startEdit(String(company.id), 'Company Size', company['Company Size'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Company Size' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Company Size']
+                                    )}
+                                </td>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Company Main Vessel Type']} onDoubleClick={()=>startEdit(String(company.id), 'Company Main Vessel Type', company['Company Main Vessel Type'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Company Main Vessel Type' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Company Main Vessel Type']
+                                    )}
+                                </td>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words break-all align-top" title={company['Company Website']} onDoubleClick={()=>startEdit(String(company.id), 'Company Website', company['Company Website'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Company Website' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Company Website'] ?? ''
+                                    )}
+                                </td>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Company Email Address']} onDoubleClick={()=>startEdit(String(company.id), 'Company Email Address', company['Company Email Address'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Company Email Address' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Company Email Address']
+                                    )}
+                                </td>
+                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Group Company']} onDoubleClick={()=>startEdit(String(company.id), 'Group Company', company['Group Company'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Group Company' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Group Company']
+                                    )}
+                                </td>
+                <td className="border-b border-primary-200 dark:border-gray-700 px-2 py-1 whitespace-pre-wrap break-words align-top" title={company['Company Tel Number']} onDoubleClick={()=>startEdit(String(company.id), 'Company Tel Number', company['Company Tel Number'] || '')}>
+                                    {editing && editing.id===String(company.id) && editing.field==='Company Tel Number' ? (
+                                        <input autoFocus className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" value={editValue} onChange={e=>setEditValue(e.target.value)} onBlur={()=>saveEdit(company)} onKeyDown={(e)=>handleKeyDown(e, company)} />
+                                    ) : (
+                                        company['Company Tel Number']
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                        {showAdd && (
+                            <tr className="bg-primary-50/40 dark:bg-gray-800/40">
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1">
+                                    <input className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" placeholder="Company (required)" value={addForm.name} onChange={(e)=>setAddForm(f=>({...f,name:e.target.value}))} />
+                                </td>
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1"></td>
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1">
+                                    <input className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" placeholder="Company Nationality/Region" value={addForm.location||''} onChange={(e)=>setAddForm(f=>({...f,location:e.target.value}))} />
+                                </td>
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1">
+                                    <input className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" placeholder="Company Primary Activity - Level 1" value={addForm.type||''} onChange={(e)=>setAddForm(f=>({...f,type:e.target.value}))} />
+                                </td>
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1">
+                                    <input className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" placeholder="Company City" value={addForm.address||''} onChange={(e)=>setAddForm(f=>({...f,address:e.target.value}))} />
+                                </td>
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1"></td>
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1"></td>
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1">
+                                    <input className="w-full bg-white dark:bg-gray-900 border border-primary-200 dark:border-gray-700 px-2 py-1 rounded text-sm" placeholder="Company Website" value={addForm.website||''} onChange={(e)=>setAddForm(f=>({...f,website:e.target.value}))} />
+                                </td>
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1"></td>
+                                <td className="border-b border-r border-primary-200 dark:border-gray-700 px-2 py-1"></td>
+                                <td className="border-b border-primary-200 dark:border-gray-700 px-2 py-1 text-right">
+                                    <button className="text-xs px-2 py-1 bg-green-600 text-white rounded mr-2" onClick={async()=>{ if(!addForm.name.trim()) return; await handleCreateCompanySimple(addForm); setShowAdd(false); setAddForm({name:''}); }}>Add</button>
+                                    <button className="text-xs px-2 py-1 bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded" onClick={()=>{ setShowAdd(false); setAddForm({name:''}); }}>Cancel</button>
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
-            <div className="flex items-center justify-between px-4 py-2 border-t border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-300">
+            <div className="flex items-center justify-between px-3 py-2 border-t border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300">
                 <span>{companies.length} companies</span>
-                <button className="flex items-center gap-1 px-2 py-1 bg-primary-50 dark:bg-gray-800 border border-primary-200 dark:border-gray-700 rounded hover:bg-primary-100 dark:hover:bg-gray-700 text-primary-700 dark:text-blue-300 text-xs font-medium">
-                    <span className="text-lg leading-none">+</span> Add…
-                </button>
+                <div className="flex items-center gap-3">
+                    <button title="Add company" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={()=> setShowAdd(s=>!s)}>
+                        <PlusIcon className="h-5 w-5" />
+                    </button>
+                    <button title="Edit selected (Company Website)" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
+                        const ids = Object.keys(selected).filter(k=>selected[k]);
+                        if (ids.length !== 1) return alert('Select exactly one row to edit.');
+                        const id = ids[0];
+                        const row = companies.find((c:any)=> String(c.id)===String(id));
+                        const current = row?.['Company Website'] || '';
+                        const next = window.prompt('Edit Company Website', current);
+                        if (next === null) return;
+                        await handleUpdateCompany({ id, 'Company Website': next });
+                    }}>
+                        <PencilIcon className="h-5 w-5" />
+                    </button>
+                    <button title="Delete selected" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
+                        const ids = Object.keys(selected).filter(k=>selected[k]);
+                        if (!ids.length) return alert('Select rows to delete.');
+                        if (!confirm(`Delete ${ids.length} compan${ids.length>1?'ies':'y'}?`)) return;
+                        for (const id of ids) {
+                            await handleDeleteCompany(id);
+                        }
+                        setSelected({});
+                    }}>
+                        <TrashIcon className="h-5 w-5" />
+                    </button>
+                </div>
             </div>
         </div>
     );
