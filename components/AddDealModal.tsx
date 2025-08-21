@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 // Vessel type options
 const VESSEL_TYPES = [
     'Container',
@@ -145,6 +145,106 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     const labelClass = "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1";
     const addButtonClass = "p-2 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 flex-shrink-0";
 
+    // Reusable searchable typeahead for companies by name
+    const SearchableCompanySelect: React.FC<{
+        id: string;
+        label: string;
+        value: string;
+        onChange: (val: string) => void;
+        companies: Company[];
+        placeholder?: string;
+        required?: boolean;
+        onAddCompanyClick?: () => void;
+    }> = ({ id, label, value, onChange, companies, placeholder = 'Search company by name…', required, onAddCompanyClick }) => {
+        const [open, setOpen] = useState(false);
+        const [query, setQuery] = useState('');
+        const containerRef = useRef<HTMLDivElement | null>(null);
+        const inputRef = useRef<HTMLInputElement | null>(null);
+
+        const selected = useMemo(() => companies.find(c => String(c.id) === String(value)) || null, [companies, value]);
+        const q = query.trim().toLowerCase();
+        const results = useMemo(() => {
+            if (!q) return companies.slice(0, 50);
+            return companies.filter(c => String(c.name || '').toLowerCase().includes(q)).slice(0, 50);
+        }, [companies, q]);
+
+        useEffect(() => {
+            const onDocClick = (e: MouseEvent) => {
+                if (!containerRef.current) return;
+                if (!containerRef.current.contains(e.target as Node)) {
+                    setOpen(false);
+                }
+            };
+            document.addEventListener('mousedown', onDocClick);
+            return () => document.removeEventListener('mousedown', onDocClick);
+        }, []);
+
+        const commitSelection = (idVal: string, name?: string) => {
+            onChange(idVal);
+            setQuery(name || '');
+            setOpen(false);
+        };
+
+        return (
+            <div className="w-full" ref={containerRef}>
+                <label htmlFor={id} className={labelClass}>{label}{required ? ' *' : ''}</label>
+                <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                        <input
+                            id={id}
+                            ref={inputRef}
+                            type="text"
+                            value={open ? query : (selected?.name ?? query)}
+                            onChange={e => { setQuery(e.target.value); setOpen(true); }}
+                            onFocus={() => { setOpen(true); setQuery(selected?.name || ''); }}
+                            placeholder={placeholder}
+                            className={inputClass}
+                            aria-autocomplete="list"
+                            aria-expanded={open}
+                            autoComplete="off"
+                            required={required && !value}
+                        />
+                        {value && (
+                            <button
+                                type="button"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100"
+                                aria-label="Clear selection"
+                                onClick={() => { onChange(''); setQuery(''); inputRef.current?.focus(); }}
+                            >
+                                ×
+                            </button>
+                        )}
+                        {open && (
+                            <div className="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg">
+                                {results.length === 0 && (
+                                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-300">No matches</div>
+                                )}
+                                {results.map(c => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-gray-700 ${String(c.id) === String(value) ? 'bg-blue-50 dark:bg-gray-700' : ''}`}
+                                        onClick={() => commitSelection(String(c.id), c.name)}
+                                    >
+                                        <div className="font-medium text-gray-900 dark:text-gray-100">{c.name}</div>
+                                        {c.location && (
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">{c.location}</div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    {onAddCompanyClick && (
+                        <button type="button" onClick={onAddCompanyClick} className={addButtonClass} aria-label={`Add new ${label.toLowerCase()}`}>
+                            <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     return (
         <Modal isOpen={true} onClose={onClose} title="Add New Project">
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -257,18 +357,15 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
 
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="shipyard" className={labelClass}>Shipyard</label>
-                        <div className="flex items-center space-x-2">
-                            <select id="shipyard" value={shipyardId} onChange={e => setShipyardId(e.target.value)} className={inputClass} required>
-                                <option value="">Select Shipyard</option>
-                                {companies.filter(c => c.type === CompanyType.SHIPYARD).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            <button type="button" onClick={() => onAddCompanyClick(CompanyType.SHIPYARD)} className={addButtonClass} aria-label="Add new shipyard">
-                                <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
-                            </button>
-                        </div>
-                    </div>
+                    <SearchableCompanySelect
+                        id="shipyard"
+                        label="Shipyard"
+                        value={shipyardId}
+                        onChange={setShipyardId}
+                        companies={companies}
+                        required
+                        onAddCompanyClick={() => onAddCompanyClick(CompanyType.SHIPYARD)}
+                    />
                     <div>
                         <label htmlFor="primaryContact" className={labelClass}>Primary Contact</label>
                         <div className="flex items-center space-x-2">
@@ -284,30 +381,22 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="vesselOwner" className={labelClass}>Vessel Owner (Optional)</label>
-                        <div className="flex items-center space-x-2">
-                            <select id="vesselOwner" value={vesselOwnerId} onChange={e => setVesselOwnerId(e.target.value)} className={inputClass}>
-                                <option value="">Select Vessel Owner</option>
-                                {companies.filter(c => c.type === CompanyType.VESSEL_OWNER).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            <button type="button" onClick={() => onAddCompanyClick(CompanyType.VESSEL_OWNER)} className={addButtonClass} aria-label="Add new vessel owner">
-                                <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label htmlFor="designCompany" className={labelClass}>Design Company (Optional)</label>
-                        <div className="flex items-center space-x-2">
-                            <select id="designCompany" value={designCompanyId} onChange={e => setDesignCompanyId(e.target.value)} className={inputClass}>
-                                <option value="">Select Design Company</option>
-                                {companies.filter(c => c.type === CompanyType.DESIGN_COMPANY).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            <button type="button" onClick={() => onAddCompanyClick(CompanyType.DESIGN_COMPANY)} className={addButtonClass} aria-label="Add new design company">
-                                <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
-                            </button>
-                        </div>
-                    </div>
+                    <SearchableCompanySelect
+                        id="vesselOwner"
+                        label="Vessel Owner (Optional)"
+                        value={vesselOwnerId}
+                        onChange={setVesselOwnerId}
+                        companies={companies}
+                        onAddCompanyClick={() => onAddCompanyClick(CompanyType.VESSEL_OWNER)}
+                    />
+                    <SearchableCompanySelect
+                        id="designCompany"
+                        label="Design Company (Optional)"
+                        value={designCompanyId}
+                        onChange={setDesignCompanyId}
+                        companies={companies}
+                        onAddCompanyClick={() => onAddCompanyClick(CompanyType.DESIGN_COMPANY)}
+                    />
                 </div>
 
                 <div>

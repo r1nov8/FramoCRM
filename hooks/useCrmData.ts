@@ -276,7 +276,11 @@ export const useCrmData = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!res.ok) throw new Error('Failed to add company');
+            if (!res.ok) {
+                let msg = 'Failed to add company';
+                try { const txt = await res.text(); msg = `${res.status}: ${txt || msg}`; } catch {}
+                throw new Error(msg);
+            }
             const created = await res.json();
             setCompanies(prev => [created, ...prev]);
             return created;

@@ -293,6 +293,10 @@ app.post('/api/companies', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('Add company error:', err);
+    // Handle duplicate company name (unique index on lower("Company"))
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'Company already exists' });
+    }
     res.status(500).json({ error: 'Internal server error' });
   }
 });

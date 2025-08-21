@@ -177,6 +177,8 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                     contacts={contacts}
                     teamMembers={teamMembers}
                     projects={projects}
+                    onAddCompanyClick={(type) => { setCompanyTypeForModal(type); setIsAddCompanyModalOpen(true); }}
+                    onAddContactClick={() => setIsAddContactModalOpen(true)}
                 />
             )}
             {isEditProjectModalOpen && projectToEdit && (
@@ -196,7 +198,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
             )}
             {isAddCompanyModalOpen && (
                 <AddCompanyModal
-                    type={companyTypeForModal}
+                    initialType={companyTypeForModal}
                     onAddCompany={handleAddCompanyAndCloseModal}
                     onClose={() => setIsAddCompanyModalOpen(false)}
                 />
