@@ -126,7 +126,7 @@ const CompanyInfoPage: React.FC = () => {
     return (
         <div className="flex flex-col h-full w-full m-0 p-0 bg-white dark:bg-gray-900">
             {/* Top banner removed as requested */}
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-auto">
                 <CompanyInfoGrid
                     selectedRows={selectedRows}
                     onSelectedRowsChange={setSelectedRows}
@@ -135,6 +135,9 @@ const CompanyInfoPage: React.FC = () => {
             <div className="flex items-center justify-between px-3 py-2 border-t border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300">
                 <span>{companies.length} companies</span>
                 <div className="flex items-center gap-3">
+                    <button title="Reload companies" className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={reloadCompanies}>
+                        Reload
+                    </button>
                     <button title="Add company" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
                         const name = window.prompt('New company name');
                         if (!name) return;

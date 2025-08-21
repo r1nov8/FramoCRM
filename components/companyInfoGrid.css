@@ -15,8 +15,11 @@
   font-family: Inter, Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
   border-radius: 12px;
-  overflow: hidden;
+  /* Allow internal scrolling for large datasets */
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--rdg-border-color);
+  height: 100%;
 }
 
 /* Dark */

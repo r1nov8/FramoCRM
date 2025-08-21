@@ -89,6 +89,7 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
           sortColumns={sortColumns}
           onSortColumnsChange={setSortColumns}
           className="rdg-light"
+          style={{ height: '100%' }}
         />
       </div>
     </div>
