@@ -257,7 +257,9 @@ app.get('/api/companies', async (req, res) => {
       '"Company Nationality/Region" as location, ' +
       '"Company Website" as website, ' +
       '"Company City" as address ' +
-      'FROM companies ORDER BY id DESC'
+      'FROM companies ' +
+      'WHERE COALESCE(TRIM("Company"), \'\') <> \'\' ' +
+      'ORDER BY id DESC'
     );
     res.json(rows);
   } catch (err) {

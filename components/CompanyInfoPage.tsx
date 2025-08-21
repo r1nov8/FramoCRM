@@ -1,7 +1,7 @@
 
 import { useData } from '../context/DataContext';
 import React, { useState, useRef, useMemo } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon } from './icons';
+import { PlusIcon, TrashIcon } from './icons';
 import CompanyInfoGrid from './CompanyInfoGrid';
 
 const CompanyInfoPage: React.FC = () => {
@@ -11,6 +11,12 @@ const CompanyInfoPage: React.FC = () => {
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
     // Grid selection (controlled)
     const [selectedRows, setSelectedRows] = useState<ReadonlySet<number | string>>(new Set());
+    // Trigger to insert a new draft row in the grid
+    const [addTrigger, setAddTrigger] = useState(0);
+    // Counts and footer controls
+    const [visibleCount, setVisibleCount] = useState<number>(0);
+    const [totalCount, setTotalCount] = useState<number>(0);
+    const [clearFiltersTrigger, setClearFiltersTrigger] = useState<number>(0);
 
     // Add quick action (no modal yet)
 
@@ -130,32 +136,24 @@ const CompanyInfoPage: React.FC = () => {
                 <CompanyInfoGrid
                     selectedRows={selectedRows}
                     onSelectedRowsChange={setSelectedRows}
+                    addTrigger={addTrigger}
+                    onCountsChange={(v, t) => { setVisibleCount(v); setTotalCount(t); }}
+                    clearFiltersTrigger={clearFiltersTrigger}
                 />
             </div>
             <div className="flex items-center justify-between px-3 py-2 border-t border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300">
-                <span>{companies.length} companies</span>
+                <span>{visibleCount === totalCount ? `${totalCount} companies` : `${visibleCount} of ${totalCount} companies`}</span>
                 <div className="flex items-center gap-3">
+                    <button title="Clear filters" className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={() => setClearFiltersTrigger(t => t + 1)}>
+                        Clear filters
+                    </button>
                     <button title="Reload companies" className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={reloadCompanies}>
                         Reload
                     </button>
-                    <button title="Add company" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
-                        const name = window.prompt('New company name');
-                        if (!name) return;
-                        await handleCreateCompanySimple({ name });
+                    <button title="Add company" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={()=>{
+                        setAddTrigger(t => t + 1);
                     }}>
                         <PlusIcon className="h-5 w-5" />
-                    </button>
-                    <button title="Edit selected (Company Website)" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
-                        const ids = Array.from(selectedRows);
-                        if (!ids.length) return alert('Select a row to edit.');
-                        const id = ids[0] as string | number;
-                        const row = companies.find((c:any)=> String(c.id)===String(id));
-                        const current = row?.['Company Website'] || '';
-                        const next = window.prompt('Edit Company Website', current);
-                        if (next === null) return;
-                        await handleUpdateCompany({ id, 'Company Website': next });
-                    }}>
-                        <PencilIcon className="h-5 w-5" />
                     </button>
                     <button title="Delete selected" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
                         const ids = Array.from(selectedRows);

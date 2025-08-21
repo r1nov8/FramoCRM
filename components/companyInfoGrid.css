@@ -34,10 +34,52 @@
 
 /* Tighten header padding slightly */
 .rdg .rdg-header-cell {
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding: 6px 8px;
   font-weight: 600;
   color: #334155; /* slate-600 */
+}
+
+/* Two-line Excel-like header with filter input below label */
+.rdg-header-with-filter {
+  display: grid;
+  grid-template-rows: auto auto;
+  row-gap: 6px;
+}
+.rdg-header-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rdg-filter-row {
+  position: relative;
+}
+
+/* Header filter input */
+.rdg-filter-input {
+  width: 100%;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--rdg-border-color);
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+}
+.rdg-filter-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #6b7280; /* gray-500 */
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.rdg-filter-clear:hover { color: #111827; }
+.dark .rdg-filter-input {
+  background: #111827; /* gray-900 */
+  border-color: #374151; /* gray-700 */
 }
 
 /* Prevent unexpected outer spacing */
