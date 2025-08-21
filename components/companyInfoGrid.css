@@ -20,6 +20,8 @@
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--rdg-border-color);
   height: 100%;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 /* Dark */
