@@ -136,7 +136,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                     </main>
                 )}
                 {activeView === 'companyInfo' && (
-                    <main className="flex-1 overflow-y-auto p-0">
+                    <main className="flex-1 overflow-y-auto p-0 pl-2">
                         <CompanyInfoPage />
                     </main>
                 )}
@@ -147,7 +147,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 )}
                 {/* Slide-in Project Pipeline View */}
                 <div
-                    className={`fixed top-16 left-16 right-0 bottom-0 z-30 transition-transform duration-500 ease-in-out bg-gray-100 dark:bg-gray-900 shadow-xl border-l border-gray-200 dark:border-gray-700 ${
+                    className={`fixed top-16 left-12 right-0 bottom-0 z-30 transition-transform duration-500 ease-in-out bg-gray-100 dark:bg-gray-900 shadow-xl border-l border-gray-200 dark:border-gray-700 ${
                         activeView === 'pipeline' ? 'translate-x-0' : '-translate-x-full pointer-events-none opacity-0'
                     } flex`}
                     style={{ height: 'calc(100vh - 4rem)' }}

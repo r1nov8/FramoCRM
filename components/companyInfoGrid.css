@@ -22,6 +22,8 @@
   height: 100%;
   margin: 0;
   box-sizing: border-box;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 /* Dark */
@@ -36,7 +38,7 @@
 
 /* Tighten header padding slightly */
 .rdg .rdg-header-cell {
-  padding: 6px 8px;
+  padding: 6px 10px;
   font-weight: 600;
   color: #334155; /* slate-600 */
 }
@@ -100,4 +102,10 @@
 /* Subtle header shadow separator */
 .rdg .rdg-header-row {
   box-shadow: 0 1px 0 0 var(--rdg-border-color), 0 2px 8px rgba(0,0,0,0.03);
+}
+
+/* Add a tiny left padding on the first cell to avoid edge collision near sidebar */
+.rdg .rdg-cell:first-child,
+.rdg .rdg-header-cell:first-child {
+  padding-left: 12px;
 }
