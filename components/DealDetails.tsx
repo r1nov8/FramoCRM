@@ -1,11 +1,13 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import type { Project, Company, Contact, TeamMember, ProjectFile } from '../types';
+import type { Task, Activity } from '../types';
 import { INITIAL_COMPANIES } from '../constants';
 import { ProjectStage, Currency } from '../types';
 import { CompanyCard } from './CompanyCard';
 import { ContactCard } from './ContactCard';
 import { ProductInfo } from './ProductInfo';
 import { PencilIcon, DollarIcon, PercentIcon, UploadIcon, DownloadIcon, TrashIcon, FileIcon, FileDocIcon, FilePdfIcon, CalculatorIcon, WrenchScrewdriverIcon } from './icons';
+import { useData } from '../context/DataContext';
 
 interface ProjectDetailsProps {
     project: Project;
@@ -60,6 +62,10 @@ const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectSt
 
 export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity } = useData();
+    const [newTaskTitle, setNewTaskTitle] = useState('');
+    const [taskFilter, setTaskFilter] = useState<'all' | 'open' | 'done' | 'overdue' | 'dueSoon'>('all');
+    const [newNote, setNewNote] = useState('');
     
     const findCompany = (id: string) =>
         companies.find(c => String(c.id) === String(id)) ||
@@ -138,6 +144,50 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                             }
                         </p>
                          <p className="text-sm text-gray-500 dark:text-gray-400">Closing Date: {new Date(project.closingDate).toLocaleDateString()}</p>
+                    </div>
+
+                    {/* Activity Log */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-xl font-semibold">Activity</h2>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    value={newNote}
+                                    onChange={(e)=> setNewNote(e.target.value)}
+                                    placeholder="Add a note..."
+                                    className="px-2 py-1 text-sm rounded border dark:border-gray-700 bg-white dark:bg-gray-900 w-72"
+                                />
+                                <button
+                                    onClick={async ()=>{
+                                        const content = newNote.trim();
+                                        if (!content) return;
+                                        try {
+                                            await handleAddActivity(project.id, { type: 'note', content });
+                                            setNewNote('');
+                                        } catch (e: any) {
+                                            alert(`Failed to add note: ${e?.message || 'Unknown error'}`);
+                                        }
+                                    }}
+                                    className="px-2 py-1 text-sm rounded bg-blue-600 text-white"
+                                >
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            {(activitiesByProject?.[project.id] || []).map((a: Activity) => (
+                                <div key={a.id} className="p-2 rounded border dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+                                    <div className="text-xs text-gray-500 flex items-center justify-between">
+                                        <span>{new Date(a.createdAt).toLocaleString()}</span>
+                                        <span>{a.type}</span>
+                                    </div>
+                                    <div className="text-sm text-gray-800 dark:text-gray-100 whitespace-pre-wrap">{a.content}</div>
+                                </div>
+                            ))}
+                            {!(activitiesByProject?.[project.id] || []).length && (
+                                <p className="text-sm text-gray-500">No activity yet.</p>
+                            )}
+                        </div>
                     </div>
                      <div className="text-right">
                          <div className="flex items-center justify-end space-x-2">
@@ -233,6 +283,139 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                             </div>
                         </div>
                     )}
+
+                    {/* Tasks & Reminders */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-xl font-semibold">Tasks & Reminders</h2>
+                            <div className="flex items-center gap-3">
+                                <select
+                                    className="px-2 py-1 text-sm rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                    value={taskFilter}
+                                    onChange={(e)=> setTaskFilter(e.target.value as any)}
+                                    title="Filter tasks"
+                                >
+                                    <option value="all">All</option>
+                                    <option value="open">Open</option>
+                                    <option value="done">Done</option>
+                                    <option value="overdue">Overdue</option>
+                                    <option value="dueSoon">Due soon (7d)</option>
+                                </select>
+                                <input
+                                    value={newTaskTitle}
+                                    onChange={(e)=>setNewTaskTitle(e.target.value)}
+                                    placeholder="New task title"
+                                    className="px-2 py-1 text-sm rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                />
+                                <button
+                                    onClick={async()=>{
+                                        if (!newTaskTitle.trim()) return;
+                                        try {
+                                            await handleAddTask(project.id, { title: newTaskTitle.trim() });
+                                            setNewTaskTitle('');
+                                        } catch (e: any) {
+                                            alert(`Failed to add task: ${e?.message || 'Unknown error'}`);
+                                        }
+                                    }}
+                                    className="px-2 py-1 text-sm rounded bg-blue-600 text-white"
+                                >
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            {useMemo(()=>{
+                                const now = new Date();
+                                const soon = new Date();
+                                soon.setDate(now.getDate() + 7);
+                                let list = (tasksByProject?.[project.id] || []) as Task[];
+                                if (taskFilter === 'open') list = list.filter(t => t.status !== 'done');
+                                if (taskFilter === 'done') list = list.filter(t => t.status === 'done');
+                                if (taskFilter === 'overdue') list = list.filter(t => t.dueDate && new Date(t.dueDate) < now && t.status !== 'done');
+                                if (taskFilter === 'dueSoon') list = list.filter(t => t.dueDate && new Date(t.dueDate) >= now && new Date(t.dueDate) <= soon && t.status !== 'done');
+                                // Sort: overdue first, then by due date asc, then by id desc
+                                list = [...list].sort((a,b)=>{
+                                    const ad = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+                                    const bd = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+                                    return ad - bd || Number(b.id) - Number(a.id);
+                                });
+                                return list;
+                            }, [tasksByProject, project.id, taskFilter]).map((t: Task) => {
+                                const overdue = t.dueDate ? new Date(t.dueDate) < new Date() && t.status !== 'done' : false;
+                                return (
+                                    <div key={t.id} className="flex items-center justify-between p-2 rounded border dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={t.status === 'done'}
+                                                onChange={() => handleUpdateTask(t.id, { projectId: project.id, status: t.status === 'done' ? 'open' : 'done' })}
+                                            />
+                                            <span className={`text-sm truncate ${t.status === 'done' ? 'line-through text-gray-500' : 'text-gray-800 dark:text-gray-100'}`}>{t.title}</span>
+                                            {t.dueDate && (
+                                                <span className={`text-xs ${overdue ? 'text-red-600' : 'text-gray-500'}`}>
+                                                    Due {new Date(t.dueDate).toLocaleDateString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {/* Status selector */}
+                                            <select
+                                                className="text-xs px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                                value={t.status}
+                                                onChange={(e)=> handleUpdateTask(t.id, { projectId: project.id, status: e.target.value as any })}
+                                                title="Status"
+                                            >
+                                                <option value="open">Open</option>
+                                                <option value="wip">In progress</option>
+                                                <option value="blocked">Blocked</option>
+                                                <option value="done">Done</option>
+                                            </select>
+                                            {/* Due date */}
+                                            <input
+                                                type="date"
+                                                className="text-xs px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                                value={t.dueDate || ''}
+                                                onChange={(e)=> handleUpdateTask(t.id, { projectId: project.id, dueDate: e.target.value || null })}
+                                                title="Due date"
+                                            />
+                                            {/* Assignee */}
+                                            <select
+                                                className="text-xs px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                                value={t.assignedTo || ''}
+                                                onChange={(e)=> handleUpdateTask(t.id, { projectId: project.id, assignedTo: e.target.value || null })}
+                                                title="Assignee"
+                                            >
+                                                <option value="">Unassigned</option>
+                                                {dataTeamMembers.map(m => (
+                                                    <option key={m.id} value={m.id}>{m.initials} - {m.first_name} {m.last_name}</option>
+                                                ))}
+                                            </select>
+                                            {/* Priority */}
+                                            <select
+                                                className="text-xs px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                                value={t.priority || 2}
+                                                onChange={(e)=> handleUpdateTask(t.id, { projectId: project.id, priority: Number(e.target.value) as 1|2|3 })}
+                                                title="Priority"
+                                            >
+                                                <option value={1}>High</option>
+                                                <option value={2}>Normal</option>
+                                                <option value={3}>Low</option>
+                                            </select>
+                                            <button
+                                                onClick={() => handleDeleteTask(project.id, t.id)}
+                                                className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {!(tasksByProject?.[project.id] || []).length && (
+                                <p className="text-sm text-gray-500">No tasks yet.</p>
+                            )}
+                        </div>
+                    </div>
 
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                         <div className="flex justify-between items-center mb-4">

@@ -103,6 +103,32 @@ export interface ProjectFile {
     content: string; // base64 encoded content
 }
 
+export type TaskStatus = 'open' | 'wip' | 'blocked' | 'done';
+
+export interface Task {
+    id: string;
+    projectId: string;
+    title: string;
+    status: TaskStatus;
+    dueDate?: string | null; // ISO date (YYYY-MM-DD)
+    assignedTo?: string | null; // team member id
+    notes?: string | null;
+    priority?: 1 | 2 | 3; // 1=high, 2=normal, 3=low
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export type ActivityType = 'note' | 'status_change' | 'system';
+
+export interface Activity {
+    id: string;
+    projectId: string;
+    type: ActivityType;
+    content: string;
+    createdBy?: string | null; // team member id or username
+    createdAt: string; // ISO timestamp
+}
+
 export interface Project {
     id:string;
     name: string;

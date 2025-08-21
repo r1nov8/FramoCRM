@@ -13,6 +13,9 @@ type CompanyInfoGridProps = {
   addTrigger?: number;
   onCountsChange?: (visible: number, total: number) => void;
   clearFiltersTrigger?: number;
+  // Optional controlled filters from parent for Saved Views
+  filters?: Record<string, string>;
+  onFiltersChange?: (filters: Record<string, string>) => void;
 };
 
 const CSV_COLUMNS: Array<{ key: string; name: string; width?: number }> = [
@@ -39,7 +42,10 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
   // Local rows state for optimistic edits
   const [rows, setRows] = useState<Row[]>([]);
   const [draftIdCounter, setDraftIdCounter] = useState(1);
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  // Allow parent-controlled filters; otherwise keep internal state
+  const [internalFilters, setInternalFilters] = useState<Record<string, string>>({});
+  const effectiveFilters = (props.filters ?? internalFilters);
+  const setFilters = (props.onFiltersChange ?? setInternalFilters);
 
   const rowKeyGetter = useCallback((r: Row) => r.id, []);
 
@@ -108,11 +114,11 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
             <div className="rdg-filter-row">
               <input
                 className="rdg-filter-input"
-                value={filters[c.key] ?? ''}
+                value={effectiveFilters[c.key] ?? ''}
                 onChange={(e) => setFilters(prev => ({ ...prev, [c.key]: e.target.value }))}
                 placeholder="Filter..."
               />
-              {Boolean(filters[c.key]) && (
+              {Boolean(effectiveFilters[c.key]) && (
                 <button
                   type="button"
                   aria-label="Clear filter"
@@ -127,17 +133,17 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
         )
       }))
     ];
-  }, [filters]);
+  }, [effectiveFilters]);
 
   // Apply filters to current rows
   const visibleRows = useMemo(() => {
-    const activeKeys = Object.keys(filters).filter(k => (filters[k] ?? '').trim() !== '');
+    const activeKeys = Object.keys(effectiveFilters).filter(k => (effectiveFilters[k] ?? '').trim() !== '');
     if (!activeKeys.length) return rows;
     const lower = (v: any) => String(v ?? '').toLowerCase();
     return rows.filter(r =>
-      activeKeys.every(k => lower(r[k]).includes(filters[k].trim().toLowerCase()))
+      activeKeys.every(k => lower(r[k]).includes(effectiveFilters[k].trim().toLowerCase()))
     );
-  }, [rows, filters]);
+  }, [rows, effectiveFilters]);
 
   // Notify parent with counts (visible vs total)
   useEffect(() => {
@@ -146,7 +152,13 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
 
   // Clear filters when trigger changes
   useEffect(() => {
-    if (props.clearFiltersTrigger) setFilters({});
+    if (props.clearFiltersTrigger) {
+      if (props.onFiltersChange) {
+        props.onFiltersChange({});
+      } else {
+        setInternalFilters({});
+      }
+    }
   }, [props.clearFiltersTrigger]);
 
   const onRowsChange = async (updatedRows: Row[], data: RowsChangeData<Row, unknown>) => {

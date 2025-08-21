@@ -2,9 +2,13 @@ import { useState, useEffect } from 'react';
 
 // Helper to get API URL from env or fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-import type { Project, Company, Contact, TeamMember, ProjectFile, Currency } from '../types';
+const MOCK = (() => {
+    const v = String(import.meta.env.VITE_MOCK_MODE ?? '').toLowerCase().trim();
+    return v === '1' || v === 'true' || v === 'yes';
+})();
+import type { Project, Company, Contact, TeamMember, ProjectFile, Currency, Task, Activity } from '../types';
 import { CompanyType } from '../types';
-import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS } from '../constants';
+import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS, INITIAL_TEAM_MEMBERS } from '../constants';
 
 const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     try {
@@ -26,16 +30,19 @@ const saveToLocalStorage = <T,>(key: string, value: T) => {
 
 export const useCrmData = () => {
     const [projects, setProjects] = useState<Project[]>(() => loadFromLocalStorage('crm_projects', INITIAL_PROJECTS));
-    const [companies, setCompanies] = useState<Company[]>([]);
-    const [contacts, setContacts] = useState<Contact[]>([]);
-    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+    const [companies, setCompanies] = useState<Company[]>(() => (MOCK ? INITIAL_COMPANIES : []));
+    const [contacts, setContacts] = useState<Contact[]>(() => (MOCK ? INITIAL_CONTACTS : []));
+    const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => (MOCK ? INITIAL_TEAM_MEMBERS : []));
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
         const loadedProjects = loadFromLocalStorage('crm_projects', INITIAL_PROJECTS);
         return loadedProjects[0]?.id || null;
     });
+    const [tasksByProject, setTasksByProject] = useState<Record<string, Task[]>>({});
+    const [activitiesByProject, setActivitiesByProject] = useState<Record<string, Activity[]>>({});
 
     useEffect(() => saveToLocalStorage('crm_projects', projects), [projects]);
     const fetchProjects = async () => {
+        if (MOCK) return; // use local initial projects
         try {
             const res = await fetch(`${API_URL}/api/projects`);
             const data = await res.json();
@@ -47,9 +54,35 @@ export const useCrmData = () => {
         }
     };
 
+    const fetchTasksForProject = async (projectId: string) => {
+        if (MOCK) { return; }
+        try {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}/tasks`);
+            const data = await res.json();
+            setTasksByProject(prev => ({ ...prev, [projectId]: Array.isArray(data) ? data : [] }));
+        } catch (err) {
+            console.error('Failed to fetch tasks:', err);
+        }
+    };
+
+    const fetchActivitiesForProject = async (projectId: string) => {
+        if (MOCK) { return; }
+        try {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}/activities`);
+            const data = await res.json();
+            setActivitiesByProject(prev => ({ ...prev, [projectId]: Array.isArray(data) ? data : [] }));
+        } catch (err) {
+            console.error('Failed to fetch activities:', err);
+        }
+    };
+
 
     // --- Moved handleUpdateTeamMember here so it's defined before return ---
     const handleUpdateTeamMember = async (member: TeamMember) => {
+        if (MOCK) {
+            setTeamMembers(prev => prev.map(m => m.id === member.id ? { ...m, ...member } : m));
+            return;
+        }
         try {
             const res = await fetch(`${API_URL}/api/team-members/${member.id}`, {
                 method: 'PUT',
@@ -76,6 +109,7 @@ export const useCrmData = () => {
 
     // Backend fetch helpers we can reuse for reloads
     const fetchCompanies = async () => {
+        if (MOCK) { setCompanies(INITIAL_COMPANIES); return; }
         try {
             const res = await fetch(`${API_URL}/api/companies`);
             const data = await res.json();
@@ -87,6 +121,7 @@ export const useCrmData = () => {
     };
 
     const fetchContacts = async () => {
+        if (MOCK) { setContacts(INITIAL_CONTACTS); return; }
         try {
             const res = await fetch(`${API_URL}/api/contacts`);
             const data = await res.json();
@@ -98,6 +133,7 @@ export const useCrmData = () => {
     };
 
     const fetchTeamMembers = async () => {
+        if (MOCK) { setTeamMembers(INITIAL_TEAM_MEMBERS); return; }
         try {
             const res = await fetch(`${API_URL}/api/team-members`);
             const data = await res.json();
@@ -127,12 +163,12 @@ export const useCrmData = () => {
     };
 
     // Initial loads
-    useEffect(() => { fetchProjects(); }, []);
-    useEffect(() => { fetchCompanies(); }, []);
+    useEffect(() => { if (!MOCK) fetchProjects(); }, []);
+    useEffect(() => { if (!MOCK) fetchCompanies(); }, []);
 
-    useEffect(() => { fetchContacts(); }, []);
+    useEffect(() => { if (!MOCK) fetchContacts(); }, []);
 
-    useEffect(() => { fetchTeamMembers(); }, []);
+    useEffect(() => { if (!MOCK) fetchTeamMembers(); }, []);
 
     // Ensure selectedProjectId is valid if projects change
     useEffect(() => {
@@ -140,6 +176,12 @@ export const useCrmData = () => {
             setSelectedProjectId(projects[0]?.id || null);
         }
     }, [projects, selectedProjectId]);
+
+    // Load tasks when project selection changes
+    useEffect(() => {
+        if (selectedProjectId) fetchTasksForProject(selectedProjectId);
+    if (selectedProjectId) fetchActivitiesForProject(selectedProjectId);
+    }, [selectedProjectId]);
 
 
 
@@ -157,6 +199,12 @@ export const useCrmData = () => {
     };
 
     const handleAddProject = async (newProject: Omit<Project, 'id'>) => {
+        if (MOCK) {
+            const created: Project = { id: `proj-${Date.now()}`, ...(newProject as any) } as Project;
+            setProjects(prev => [created, ...prev]);
+            setSelectedProjectId(created.id);
+            return;
+        }
         try {
             console.log('[useCrmData] handleAddProject called with:', newProject);
             const normalized = normalizeProjectIds(newProject);
@@ -180,6 +228,10 @@ export const useCrmData = () => {
     };
 
     const handleUpdateProject = async (updatedProject: Project) => {
+        if (MOCK) {
+            setProjects(prev => prev.map(p => p.id === updatedProject.id ? { ...p, ...updatedProject } : p));
+            return;
+        }
         try {
             const normalized = normalizeProjectIds(updatedProject);
             const res = await fetch(`${API_URL}/api/projects/${updatedProject.id}`, {
@@ -197,6 +249,18 @@ export const useCrmData = () => {
 
     // File upload and product upload should use backend as well (not just local)
     const handleUploadFiles = async (projectId: string, files: FileList) => {
+        if (MOCK) {
+            const newFiles: ProjectFile[] = Array.from(files).map(f => ({
+                id: `file-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+                projectId,
+                name: f.name,
+                type: f.type,
+                size: f.size,
+                url: ''
+            } as any));
+            setProjects(prev => prev.map(p => p.id === projectId ? { ...p, files: [...(p.files || []), ...newFiles] } : p));
+            return;
+        }
         const filePromises = Array.from(files).map(file => {
             return new Promise<ProjectFile>((resolve, reject) => {
                 const reader = new FileReader();
@@ -255,6 +319,11 @@ export const useCrmData = () => {
     
 
     const handleAddCompany = async (newCompany: Omit<Company, 'id'>) => {
+        if (MOCK) {
+            const created = { id: `comp-${Date.now()}`, ...newCompany } as any as Company;
+            setCompanies(prev => [created, ...prev]);
+            return;
+        }
         try {
             // Normalize type to enum value
             let normalizedType = newCompany.type;
@@ -282,6 +351,11 @@ export const useCrmData = () => {
 
     // Create company with minimal CSV-aligned fields supported by backend POST
     const handleCreateCompanySimple = async (payload: { name: string; type?: string; location?: string; address?: string; website?: string; }) => {
+        if (MOCK) {
+            const created = { id: `comp-${Date.now()}`, Company: payload.name, name: payload.name, ...payload } as any;
+            setCompanies(prev => [created, ...prev]);
+            return created;
+        }
         try {
             if (!payload?.name) throw new Error('Name is required');
             const res = await fetch(`${API_URL}/api/companies`, {
@@ -305,6 +379,15 @@ export const useCrmData = () => {
 
     // Update company; accepts partial body with CSV column names or compat names, and id
     const handleUpdateCompany = async (update: any) => {
+        if (MOCK) {
+            const id = update?.id;
+            if (!id) throw new Error('Missing company id');
+            const body = { ...update };
+            delete body.id;
+            const updated = { id, ...body };
+            setCompanies(prev => prev.map(c => c.id === id ? { ...c, ...updated } : c));
+            return updated as any;
+        }
         try {
             const id = update?.id;
             if (!id) throw new Error('Missing company id');
@@ -326,6 +409,7 @@ export const useCrmData = () => {
     };
 
     const handleDeleteCompany = async (id: string | number) => {
+        if (MOCK) { setCompanies(prev => prev.filter(c => c.id !== id)); return; }
         try {
             const res = await fetch(`${API_URL}/api/companies/${id}`, { method: 'DELETE' });
             if (!res.ok && res.status !== 204) throw new Error('Failed to delete company');
@@ -338,6 +422,11 @@ export const useCrmData = () => {
 
 
     const handleAddContact = async (newContact: Omit<Contact, 'id'>) => {
+        if (MOCK) {
+            const created = { id: `cont-${Date.now()}`, ...newContact } as Contact;
+            setContacts(prev => [created, ...prev]);
+            return;
+        }
         try {
             // Normalize companyId to integer if possible and map to company_id for backend
             let company_id = newContact.companyId;
@@ -364,6 +453,11 @@ export const useCrmData = () => {
 
 
     const handleAddTeamMember = async (newMember: Omit<TeamMember, 'id'>) => {
+        if (MOCK) {
+            const created = { id: `team-${Date.now()}`, ...newMember } as TeamMember;
+            setTeamMembers(prev => [created, ...prev]);
+            return;
+        }
         try {
             const res = await fetch(`${API_URL}/api/team-members`, {
                 method: 'POST',
@@ -390,6 +484,11 @@ export const useCrmData = () => {
 
 
     const handleDeleteTeamMember = async (memberId: string) => {
+        if (MOCK) {
+            setProjects(prevProjects => prevProjects.map(p => p.salesRepId === memberId ? { ...p, salesRepId: undefined } : p));
+            setTeamMembers(prev => prev.filter(m => m.id !== memberId));
+            return;
+        }
         try {
             const res = await fetch(`${API_URL}/api/team-members/${memberId}`, { method: 'DELETE' });
             if (!res.ok && res.status !== 204) throw new Error('Failed to delete team member');
@@ -430,6 +529,90 @@ export const useCrmData = () => {
         );
     };
 
+    // ---- Tasks CRUD ----
+    const handleAddTask = async (projectId: string, task: Partial<Task>) => {
+        if (MOCK) {
+            const created: Task = {
+                id: `task-${Date.now()}`,
+                projectId,
+                title: task.title || 'New Task',
+                status: (task.status as any) || 'open',
+                dueDate: task.dueDate || null,
+                assignedTo: (task.assignedTo as any) || null,
+                notes: task.notes || null,
+                priority: (task.priority as any) || 2,
+            };
+            setTasksByProject(prev => ({ ...prev, [projectId]: [created, ...(prev[projectId] || [])] }));
+            return created;
+        }
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(task)
+        });
+        if (!res.ok) throw new Error('Failed to add task');
+        const created = await res.json();
+        setTasksByProject(prev => ({ ...prev, [projectId]: [created, ...(prev[projectId] || [])] }));
+        return created;
+    };
+
+    const handleUpdateTask = async (taskId: string, patch: Partial<Task> & { projectId: string }) => {
+        const { projectId, ...body } = patch as any;
+        if (MOCK) {
+            setTasksByProject(prev => ({
+                ...prev,
+                [projectId]: (prev[projectId] || []).map(t => t.id === taskId ? { ...t, ...body } : t)
+            }));
+            return;
+        }
+        const res = await fetch(`${API_URL}/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error('Failed to update task');
+        const updated = await res.json();
+        setTasksByProject(prev => ({
+            ...prev,
+            [projectId]: (prev[projectId] || []).map(t => t.id === taskId ? updated : t)
+        }));
+    };
+
+    const handleDeleteTask = async (projectId: string, taskId: string) => {
+        if (MOCK) {
+            setTasksByProject(prev => ({ ...prev, [projectId]: (prev[projectId] || []).filter(t => t.id !== taskId) }));
+            return;
+        }
+        const res = await fetch(`${API_URL}/api/tasks/${taskId}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) throw new Error('Failed to delete task');
+        setTasksByProject(prev => ({ ...prev, [projectId]: (prev[projectId] || []).filter(t => t.id !== taskId) }));
+    };
+
+    // ---- Activities CRUD ----
+    const handleAddActivity = async (projectId: string, payload: Partial<Activity> & { content: string }) => {
+        if (MOCK) {
+            const created: Activity = {
+                id: `act-${Date.now()}`,
+                projectId,
+                type: (payload.type as any) || 'note',
+                content: payload.content,
+                createdBy: (payload.createdBy as any) || null,
+                createdAt: new Date().toISOString(),
+            };
+            setActivitiesByProject(prev => ({ ...prev, [projectId]: [created, ...(prev[projectId] || [])] }));
+            return created;
+        }
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/activities`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Failed to add activity');
+        const created = await res.json();
+        setActivitiesByProject(prev => ({ ...prev, [projectId]: [created, ...(prev[projectId] || [])] }));
+        return created;
+    };
+
     return {
         projects,
         companies,
@@ -450,6 +633,12 @@ export const useCrmData = () => {
         handleUploadFiles,
         handleDeleteFile,
     handleUpdateProjectPrice,
+    tasksByProject,
+    handleAddTask,
+    handleUpdateTask,
+    handleDeleteTask,
+    activitiesByProject,
+    handleAddActivity,
     // Expose reload helpers for components to refresh after imports, etc.
     reloadProjects: fetchProjects,
     reloadCompanies: fetchCompanies,

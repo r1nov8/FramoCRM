@@ -638,6 +638,148 @@ app.delete('/api/project-files/:id', async (req, res) => {
   }
 });
 
+// --- Tasks CRUD Endpoints ---
+// Expected DB schema:
+// CREATE TABLE IF NOT EXISTS tasks (
+//   id SERIAL PRIMARY KEY,
+//   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+//   title TEXT NOT NULL,
+//   status TEXT NOT NULL DEFAULT 'open',
+//   due_date DATE,
+//   assigned_to INTEGER,
+//   notes TEXT,
+//   priority SMALLINT DEFAULT 2,
+//   created_at TIMESTAMP DEFAULT NOW(),
+//   updated_at TIMESTAMP DEFAULT NOW()
+// );
+// CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+
+function taskRowToApi(r) {
+  return {
+    id: String(r.id),
+    projectId: String(r.project_id),
+    title: r.title,
+    status: r.status,
+    dueDate: r.due_date ? new Date(r.due_date).toISOString().slice(0,10) : null,
+    assignedTo: r.assigned_to !== null && r.assigned_to !== undefined ? String(r.assigned_to) : null,
+    notes: r.notes || null,
+    priority: r.priority ?? 2,
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : undefined,
+    updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : undefined,
+  };
+}
+
+app.get('/api/projects/:id/tasks', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query('SELECT * FROM tasks WHERE project_id = $1 ORDER BY due_date NULLS LAST, id DESC', [id]);
+    res.json(rows.map(taskRowToApi));
+  } catch (err) {
+    console.error('Get tasks error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/projects/:id/tasks', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, status = 'open', dueDate = null, assignedTo = null, notes = null, priority = 2 } = req.body || {};
+    if (!title) return res.status(400).json({ error: 'Missing title' });
+    const { rows } = await pool.query(
+      'INSERT INTO tasks (project_id, title, status, due_date, assigned_to, notes, priority) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [id, title, status, dueDate, assignedTo ? Number(assignedTo) : null, notes, priority]
+    );
+    res.status(201).json(taskRowToApi(rows[0]));
+  } catch (err) {
+    console.error('Add task error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/tasks/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const b = req.body || {};
+    const map = {
+      title: 'title',
+      status: 'status',
+      dueDate: 'due_date',
+      assignedTo: 'assigned_to',
+      notes: 'notes',
+      priority: 'priority'
+    };
+    const updates = [];
+    const values = [];
+    for (const [k, v] of Object.entries(b)) {
+      const col = map[k];
+      if (!col) continue;
+      const val = (k === 'assignedTo') ? (v ? Number(v) : null) : v;
+      updates.push(`${col} = $${values.length + 1}`);
+      values.push(val);
+    }
+    if (!updates.length) return res.status(400).json({ error: 'No updatable fields provided' });
+    values.push(taskId);
+    const { rows } = await pool.query(
+      `UPDATE tasks SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(taskRowToApi(rows[0]));
+  } catch (err) {
+    console.error('Update task error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/tasks/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    await pool.query('DELETE FROM tasks WHERE id = $1', [taskId]);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Delete task error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Activities (Project Activity Log) Endpoints ---
+function activityRowToApi(r) {
+  return {
+    id: String(r.id),
+    projectId: String(r.project_id),
+    type: r.type || 'note',
+    content: r.content,
+    createdBy: r.created_by !== null && r.created_by !== undefined ? String(r.created_by) : null,
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+app.get('/api/projects/:id/activities', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query('SELECT * FROM activities WHERE project_id = $1 ORDER BY id DESC', [id]);
+    res.json(rows.map(activityRowToApi));
+  } catch (err) {
+    console.error('Get activities error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/projects/:id/activities', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type = 'note', content, createdBy = null } = req.body || {};
+    if (!content || !String(content).trim()) return res.status(400).json({ error: 'Missing content' });
+    const { rows } = await pool.query(
+      'INSERT INTO activities (project_id, type, content, created_by) VALUES ($1, $2, $3, $4) RETURNING *',
+      [id, type, content, createdBy ? Number(createdBy) : null]
+    );
+    res.status(201).json(activityRowToApi(rows[0]));
+  } catch (err) {
+    console.error('Add activity error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 // Add a team member
 app.post('/api/team-members', async (req, res) => {
   try {
