@@ -217,20 +217,146 @@ if (FILES_ENABLED) {
   });
 }
 
-// Get all projects
+// Helper: map DB row (snake_case) to API shape (camelCase)
+function projectRowToApi(r) {
+  if (!r) return null;
+  return {
+    id: String(r.id),
+    name: r.name,
+    opportunityNumber: r.opportunity_number,
+    orderNumber: r.order_number || undefined,
+    stage: r.stage,
+    value: r.value !== null && r.value !== undefined ? Number(r.value) : 0,
+    currency: r.currency,
+    hedgeCurrency: r.hedge_currency || undefined,
+    grossMarginPercent: r.gross_margin_percent !== null && r.gross_margin_percent !== undefined ? Number(r.gross_margin_percent) : undefined,
+    closingDate: r.closing_date ? new Date(r.closing_date).toISOString().slice(0,10) : '',
+    salesRepId: r.sales_rep_id !== null && r.sales_rep_id !== undefined ? String(r.sales_rep_id) : undefined,
+    shipyardId: r.shipyard_id !== null && r.shipyard_id !== undefined ? String(r.shipyard_id) : '',
+    vesselOwnerId: r.vessel_owner_id !== null && r.vessel_owner_id !== undefined ? String(r.vessel_owner_id) : undefined,
+    designCompanyId: r.design_company_id !== null && r.design_company_id !== undefined ? String(r.design_company_id) : undefined,
+    primaryContactId: r.primary_contact_id !== null && r.primary_contact_id !== undefined ? String(r.primary_contact_id) : undefined,
+    notes: r.notes || '',
+    numberOfVessels: r.number_of_vessels !== null && r.number_of_vessels !== undefined ? Number(r.number_of_vessels) : 1,
+    pumpsPerVessel: r.pumps_per_vessel !== null && r.pumps_per_vessel !== undefined ? Number(r.pumps_per_vessel) : 1,
+    pricePerVessel: r.price_per_vessel !== null && r.price_per_vessel !== undefined ? Number(r.price_per_vessel) : undefined,
+    vesselSize: r.vessel_size !== null && r.vessel_size !== undefined ? Number(r.vessel_size) : undefined,
+    vesselSizeUnit: r.vessel_size_unit || undefined,
+    fuelType: r.fuel_type,
+    products: [],
+    files: [],
+  };
+}
+
+// Get all projects (return camelCase)
 app.get('/api/projects', async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM projects ORDER BY id DESC');
-  res.json(rows);
+  res.json(rows.map(projectRowToApi));
 });
 
-// Add a project
+// Add a project (accept full payload)
 app.post('/api/projects', async (req, res) => {
-  const { name, description } = req.body;
-  const { rows } = await pool.query(
-    'INSERT INTO projects (name, description) VALUES ($1, $2) RETURNING *',
-    [name, description]
-  );
-  res.status(201).json(rows[0]);
+  try {
+    const b = req.body || {};
+    // Basic required fields
+    if (!b.name || !b.opportunityNumber || !b.stage || !b.currency || !b.closingDate || !b.shipyardId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const cols = [
+      'name','opportunity_number','order_number','stage','value','currency','hedge_currency','gross_margin_percent','closing_date',
+      'sales_rep_id','shipyard_id','vessel_owner_id','design_company_id','primary_contact_id','notes','number_of_vessels','pumps_per_vessel',
+      'price_per_vessel','vessel_size','vessel_size_unit','fuel_type'
+    ];
+    const vals = [
+      b.name,
+      b.opportunityNumber,
+      b.orderNumber || null,
+      b.stage,
+      b.value ?? 0,
+      b.currency,
+      b.hedgeCurrency || null,
+      b.grossMarginPercent ?? null,
+      b.closingDate,
+      b.salesRepId ? Number(b.salesRepId) : null,
+      b.shipyardId ? Number(b.shipyardId) : null,
+      b.vesselOwnerId ? Number(b.vesselOwnerId) : null,
+      b.designCompanyId ? Number(b.designCompanyId) : null,
+      b.primaryContactId ? Number(b.primaryContactId) : null,
+      b.notes || '',
+      b.numberOfVessels ?? 1,
+      b.pumpsPerVessel ?? 1,
+      b.pricePerVessel ?? null,
+      b.vesselSize ?? null,
+      b.vesselSizeUnit || null,
+      b.fuelType
+    ];
+    const placeholders = vals.map((_, i) => `$${i + 1}`);
+    const { rows } = await pool.query(
+      `INSERT INTO projects (${cols.join(',')}) VALUES (${placeholders.join(',')}) RETURNING *`,
+      vals
+    );
+    res.status(201).json(projectRowToApi(rows[0]));
+  } catch (err) {
+    console.error('Add project error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update a project (partial update)
+app.put('/api/projects/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const b = req.body || {};
+    const map = {
+      name: 'name',
+      opportunityNumber: 'opportunity_number',
+      orderNumber: 'order_number',
+      stage: 'stage',
+      value: 'value',
+      currency: 'currency',
+      hedgeCurrency: 'hedge_currency',
+      grossMarginPercent: 'gross_margin_percent',
+      closingDate: 'closing_date',
+      salesRepId: 'sales_rep_id',
+      shipyardId: 'shipyard_id',
+      vesselOwnerId: 'vessel_owner_id',
+      designCompanyId: 'design_company_id',
+      primaryContactId: 'primary_contact_id',
+      notes: 'notes',
+      numberOfVessels: 'number_of_vessels',
+      pumpsPerVessel: 'pumps_per_vessel',
+      pricePerVessel: 'price_per_vessel',
+      vesselSize: 'vessel_size',
+      vesselSizeUnit: 'vessel_size_unit',
+      fuelType: 'fuel_type',
+    };
+    const updates = [];
+    const values = [];
+    for (const [k, v] of Object.entries(b)) {
+      const col = map[k];
+      if (!col) continue;
+      let val = v;
+      if ([
+        'salesRepId','shipyardId','vesselOwnerId','designCompanyId','primaryContactId'
+      ].includes(k)) {
+        val = v !== null && v !== undefined && v !== '' ? Number(v) : null;
+      }
+      const q = `${col} = $${values.length + 1}`;
+      updates.push(q);
+      values.push(val);
+    }
+    if (!updates.length) return res.status(400).json({ error: 'No updatable fields provided' });
+    values.push(id);
+    const { rows } = await pool.query(
+      `UPDATE projects SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(projectRowToApi(rows[0]));
+  } catch (err) {
+    console.error('Update project error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 

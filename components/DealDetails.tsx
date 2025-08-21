@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import type { Project, Company, Contact, TeamMember, ProjectFile } from '../types';
+import { INITIAL_COMPANIES } from '../constants';
 import { ProjectStage, Currency } from '../types';
 import { CompanyCard } from './CompanyCard';
 import { ContactCard } from './ContactCard';
@@ -60,7 +61,9 @@ const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectSt
 export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     
-    const findCompany = (id: string) => companies.find(c => c.id === id);
+    const findCompany = (id: string) =>
+        companies.find(c => String(c.id) === String(id)) ||
+        INITIAL_COMPANIES.find(c => String(c.id) === String(id));
     const findContact = (id: string) => contacts.find(c => c.id === id);
     const salesRep = project.salesRepId ? teamMembers.find(tm => tm.id === project.salesRepId) : undefined;
 
