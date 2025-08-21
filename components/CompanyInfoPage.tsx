@@ -9,13 +9,10 @@ const CompanyInfoPage: React.FC = () => {
     const { companies, reloadCompanies, handleCreateCompanySimple, handleUpdateCompany, handleDeleteCompany } = useData() as any;
     // CSV upload removed (one-time import is no longer part of the app)
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-    const [editing, setEditing] = useState<{ id: string; field: EditableField } | null>(null);
-    const [editValue, setEditValue] = useState<string>('');
-    const [selected, setSelected] = useState<{ [id: string]: boolean }>({});
+    // Grid selection (controlled)
+    const [selectedRows, setSelectedRows] = useState<ReadonlySet<number | string>>(new Set());
 
-    // Add form state
-    const [showAdd, setShowAdd] = useState(false);
-    const [addForm, setAddForm] = useState<{ name: string; type?: string; location?: string; address?: string; website?: string }>({ name: '' });
+    // Add quick action (no modal yet)
 
 
     type EditableField =
@@ -122,29 +119,7 @@ const CompanyInfoPage: React.FC = () => {
         document.removeEventListener('mousemove', handleResizeMove);
         document.removeEventListener('mouseup', handleResizeEnd);
     };
-    const startEdit = (id: string, field: EditableField, value: string) => {
-        setEditing({ id, field });
-        setEditValue(value);
-    };
-
-    const saveEdit = async (company: any) => {
-        if (!editing) return;
-        if (editValue.trim() === '' || editValue === company[editing.field]) {
-            setEditing(null);
-            return;
-        }
-        // Call update handler (should update backend and context)
-        await handleUpdateCompany({ id: company.id, [editing.field]: editValue });
-        setEditing(null);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent, company: any) => {
-        if (e.key === 'Enter') {
-            saveEdit(company);
-        } else if (e.key === 'Escape') {
-            setEditing(null);
-        }
-    };
+    // Legacy inline edit handlers for the old table are no longer used with DataGrid
 
     // Upload removed
 
@@ -152,18 +127,25 @@ const CompanyInfoPage: React.FC = () => {
         <div className="flex flex-col h-full w-full m-0 p-0 bg-white dark:bg-gray-900">
             {/* Top banner removed as requested */}
             <div className="flex-1 min-h-0">
-                <CompanyInfoGrid />
+                <CompanyInfoGrid
+                    selectedRows={selectedRows}
+                    onSelectedRowsChange={setSelectedRows}
+                />
             </div>
             <div className="flex items-center justify-between px-3 py-2 border-t border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300">
                 <span>{companies.length} companies</span>
                 <div className="flex items-center gap-3">
-                    <button title="Add company" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={()=> setShowAdd(s=>!s)}>
+                    <button title="Add company" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
+                        const name = window.prompt('New company name');
+                        if (!name) return;
+                        await handleCreateCompanySimple({ name });
+                    }}>
                         <PlusIcon className="h-5 w-5" />
                     </button>
                     <button title="Edit selected (Company Website)" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
-                        const ids = Object.keys(selected).filter(k=>selected[k]);
+                        const ids = Array.from(selectedRows);
                         if (ids.length !== 1) return alert('Select exactly one row to edit.');
-                        const id = ids[0];
+                        const id = ids[0] as string | number;
                         const row = companies.find((c:any)=> String(c.id)===String(id));
                         const current = row?.['Company Website'] || '';
                         const next = window.prompt('Edit Company Website', current);
@@ -173,13 +155,13 @@ const CompanyInfoPage: React.FC = () => {
                         <PencilIcon className="h-5 w-5" />
                     </button>
                     <button title="Delete selected" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
-                        const ids = Object.keys(selected).filter(k=>selected[k]);
+                        const ids = Array.from(selectedRows);
                         if (!ids.length) return alert('Select rows to delete.');
                         if (!confirm(`Delete ${ids.length} compan${ids.length>1?'ies':'y'}?`)) return;
                         for (const id of ids) {
                             await handleDeleteCompany(id);
                         }
-                        setSelected({});
+                        setSelectedRows(new Set());
                     }}>
                         <TrashIcon className="h-5 w-5" />
                     </button>

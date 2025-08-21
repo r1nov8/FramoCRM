@@ -50,7 +50,12 @@ export const useCrmData = () => {
                 })
             });
             if (!res.ok) throw new Error('Failed to update team member');
-            const updated = await res.json();
+            const updatedRaw = await res.json();
+            const updated = {
+                ...updatedRaw,
+                jobTitle: updatedRaw.job_title,
+                name: `${updatedRaw.first_name} ${updatedRaw.last_name}`
+            };
             setTeamMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
         } catch (err) {
             console.error('Update team member error:', err);
@@ -84,11 +89,25 @@ export const useCrmData = () => {
         try {
             const res = await fetch(`${API_URL}/api/team-members`);
             const data = await res.json();
-            setTeamMembers((Array.isArray(data) ? data : []).map((m: any) => ({
-                ...m,
-                jobTitle: m.job_title,
-                name: `${m.first_name} ${m.last_name}`
-            })));
+            setTeamMembers((Array.isArray(data) ? data : []).map((m: any) => {
+                const hasSplit = m.first_name || m.last_name;
+                let first = m.first_name;
+                let last = m.last_name;
+                if (!hasSplit && m.name) {
+                    const parts = String(m.name).trim().split(/\s+/);
+                    first = parts.shift() || '';
+                    last = parts.join(' ');
+                }
+                const initials = m.initials || `${(first || '').charAt(0)}${(last || '').charAt(0)}`.toUpperCase();
+                return {
+                    ...m,
+                    first_name: first || '',
+                    last_name: last || '',
+                    initials,
+                    jobTitle: m.job_title ?? m.jobTitle,
+                    name: `${first || ''} ${last || ''}`.trim()
+                };
+            }));
         } catch (err) {
             console.error('Failed to fetch team members:', err);
             setTeamMembers([]);
@@ -340,7 +359,12 @@ export const useCrmData = () => {
                 })
             });
             if (!res.ok) throw new Error('Failed to add team member');
-            const created = await res.json();
+            const createdRaw = await res.json();
+            const created = {
+                ...createdRaw,
+                jobTitle: createdRaw.job_title,
+                name: `${createdRaw.first_name} ${createdRaw.last_name}`
+            };
             setTeamMembers(prev => [created, ...prev]);
         } catch (err) {
             console.error('Add team member error:', err);

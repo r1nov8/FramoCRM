@@ -1,9 +1,16 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import DataGrid, { Column, SortColumn, SelectColumn, RowsChangeData } from 'react-data-grid';
+import { DataGrid, SelectColumn } from 'react-data-grid';
+import type { Column, SortColumn, RowsChangeData } from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
+import './companyInfoGrid.css';
 import { useData } from '../context/DataContext';
 
 type Row = any;
+
+type CompanyInfoGridProps = {
+  selectedRows?: ReadonlySet<number | string>;
+  onSelectedRowsChange?: (selection: ReadonlySet<number | string>) => void;
+};
 
 const CSV_COLUMNS: Array<{ key: string; name: string; width?: number }> = [
   { key: 'Company', name: 'Company', width: 200 },
@@ -19,9 +26,12 @@ const CSV_COLUMNS: Array<{ key: string; name: string; width?: number }> = [
   { key: 'Company Tel Number', name: 'Company Tel Number', width: 180 }
 ];
 
-export default function CompanyInfoGrid() {
+export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
   const { companies, handleUpdateCompany, handleDeleteCompany, handleCreateCompanySimple } = useData() as any;
-  const [selectedRows, setSelectedRows] = useState<ReadonlySet<number | string>>(new Set());
+  // Allow parent to control selection; fall back to internal state
+  const [internalSelectedRows, setInternalSelectedRows] = useState<ReadonlySet<number | string>>(new Set());
+  const selectedRows = props.selectedRows ?? internalSelectedRows;
+  const setSelectedRows = props.onSelectedRowsChange ?? setInternalSelectedRows;
   const [sortColumns, setSortColumns] = useState<readonly SortColumn[]>([]);
 
   const rowKeyGetter = useCallback((r: Row) => r.id, []);
@@ -66,28 +76,8 @@ export default function CompanyInfoGrid() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedRows.size) return;
-    if (!confirm(`Delete ${selectedRows.size} selected row(s)?`)) return;
-    for (const id of selectedRows) await handleDeleteCompany(id);
-    setSelectedRows(new Set());
-  };
-
-  const handleQuickAdd = async () => {
-    const name = prompt('New company name');
-    if (!name) return;
-    await handleCreateCompanySimple({ name });
-  };
-
   return (
     <div className="flex flex-col h-full w-full min-h-0">
-      <div className="flex items-center justify-between p-2 text-xs border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-        <div className="text-gray-600 dark:text-gray-300">{companies?.length || 0} rows</div>
-        <div className="flex gap-2">
-          <button className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={handleQuickAdd}>Add</button>
-          <button className="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" onClick={handleDelete}>Delete</button>
-        </div>
-      </div>
       <div className="flex-1 min-h-0">
         <DataGrid
           columns={columns}
