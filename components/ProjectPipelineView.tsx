@@ -17,6 +17,7 @@ interface ProjectPipelineViewProps {
     onDeleteFile: (projectId: string, fileId: string) => void;
     onOpenHPUSizing: () => void;
     onOpenEstimateCalculator: () => void;
+    isActive?: boolean;
 }
 
 export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
@@ -33,6 +34,7 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
     onDeleteFile,
     onOpenHPUSizing,
     onOpenEstimateCalculator,
+    isActive = false,
 }) => {
     // Import UI removed as part of rollback
     // Ensure a project is selected so details/tools are visible
@@ -63,6 +65,7 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
                         onDeleteFile={onDeleteFile}
                         onOpenHPUSizing={onOpenHPUSizing}
                         onOpenEstimateCalculator={onOpenEstimateCalculator}
+                        isActive={isActive}
                     />
                 ) : (
                     <div className="flex items-center justify-center h-full">

@@ -41,6 +41,11 @@ export const useCrmData = () => {
     const [activitiesByProject, setActivitiesByProject] = useState<Record<string, Activity[]>>({});
 
     useEffect(() => saveToLocalStorage('crm_projects', projects), [projects]);
+    const authHeaders = () => {
+        const t = localStorage.getItem('token');
+        return t ? { Authorization: `Bearer ${t}` } : {};
+    };
+
     const fetchProjects = async () => {
         if (MOCK) return; // use local initial projects
         try {
@@ -211,7 +216,7 @@ export const useCrmData = () => {
             console.log('[useCrmData] Normalized project:', normalized);
             const res = await fetch(`${API_URL}/api/projects`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify(normalized)
             });
             if (!res.ok) {
@@ -236,12 +241,14 @@ export const useCrmData = () => {
             const normalized = normalizeProjectIds(updatedProject);
             const res = await fetch(`${API_URL}/api/projects/${updatedProject.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify(normalized)
             });
             if (!res.ok) throw new Error('Failed to update project');
             const updated = await res.json();
             setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+            // Refresh activity log after project update
+            try { await fetchActivitiesForProject(String(updated.id)); } catch {}
         } catch (err) {
             console.error('Update project error:', err);
         }
@@ -547,12 +554,13 @@ export const useCrmData = () => {
         }
         const res = await fetch(`${API_URL}/api/projects/${projectId}/tasks`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify(task)
         });
         if (!res.ok) throw new Error('Failed to add task');
         const created = await res.json();
         setTasksByProject(prev => ({ ...prev, [projectId]: [created, ...(prev[projectId] || [])] }));
+    try { await fetchActivitiesForProject(projectId); } catch {}
         return created;
     };
 
@@ -567,7 +575,7 @@ export const useCrmData = () => {
         }
         const res = await fetch(`${API_URL}/api/tasks/${taskId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify(body)
         });
         if (!res.ok) throw new Error('Failed to update task');
@@ -576,6 +584,7 @@ export const useCrmData = () => {
             ...prev,
             [projectId]: (prev[projectId] || []).map(t => t.id === taskId ? updated : t)
         }));
+    try { await fetchActivitiesForProject(projectId); } catch {}
     };
 
     const handleDeleteTask = async (projectId: string, taskId: string) => {
@@ -583,9 +592,10 @@ export const useCrmData = () => {
             setTasksByProject(prev => ({ ...prev, [projectId]: (prev[projectId] || []).filter(t => t.id !== taskId) }));
             return;
         }
-        const res = await fetch(`${API_URL}/api/tasks/${taskId}`, { method: 'DELETE' });
+    const res = await fetch(`${API_URL}/api/tasks/${taskId}`, { method: 'DELETE', headers: { ...authHeaders() } });
         if (!res.ok && res.status !== 204) throw new Error('Failed to delete task');
         setTasksByProject(prev => ({ ...prev, [projectId]: (prev[projectId] || []).filter(t => t.id !== taskId) }));
+    try { await fetchActivitiesForProject(projectId); } catch {}
     };
 
     // ---- Activities CRUD ----
@@ -604,7 +614,7 @@ export const useCrmData = () => {
         }
         const res = await fetch(`${API_URL}/api/projects/${projectId}/activities`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error('Failed to add activity');
@@ -639,6 +649,7 @@ export const useCrmData = () => {
     handleDeleteTask,
     activitiesByProject,
     handleAddActivity,
+    reloadActivitiesForProject: fetchActivitiesForProject,
     // Expose reload helpers for components to refresh after imports, etc.
     reloadProjects: fetchProjects,
     reloadCompanies: fetchCompanies,

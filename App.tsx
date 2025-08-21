@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Header } from './components/Header';
-import { ExitDoorIcon, UsersIcon } from './components/icons';
+import { ExitDoorIcon, UsersIcon, BellIcon } from './components/icons';
 import { IconSidebar } from './components/IconSidebar';
 import FilesBrowser from './components/FilesBrowser';
 import { Dashboard } from './components/Dashboard';
@@ -18,9 +18,10 @@ import { AddContactModal } from './components/AddContactModal';
 import { ManageTeamModal } from './components/ManageTeamModal';
 import { HPUSizingModal } from './components/HPUSizingModal';
 import { EstimateCalculatorModal } from './components/EstimateCalculatorModal';
-import type { Project, Company, Contact, Currency } from './types';
+import type { Project, Company, Contact, Currency, Activity } from './types';
 import { CompanyType } from './types';
 import { useData } from './context/DataContext';
+import ActivitySlideOver from './components/ActivitySlideOver';
 
 type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files';
 
@@ -45,8 +46,10 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
         handleUpdateTeamMember,
         handleDeleteTeamMember,
         handleUploadFiles,
-        handleDeleteFile,
-        handleUpdateProjectPrice
+    handleDeleteFile,
+    handleUpdateProjectPrice,
+        activitiesByProject,
+        reloadActivitiesForProject,
     } = useData();
 
     const [isAddProjectModalOpen, setIsAddProjectModalOpen] = useState(false);
@@ -59,6 +62,55 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
     const [isEstimateCalculatorOpen, setIsEstimateCalculatorOpen] = useState(false);
     const [activeView, setActiveView] = useState<View>('dashboard');
     const [companyTypeForModal, setCompanyTypeForModal] = useState<CompanyType | null>(null);
+    const [isActivityOpen, setIsActivityOpen] = useState(false);
+    const [activityMenuOpen, setActivityMenuOpen] = useState(false);
+    const [activityProjectId, setActivityProjectId] = useState<string | null>(null);
+    const [readActivityIds, setReadActivityIds] = useState<Set<string>>(new Set());
+
+    // Compute unread counts per project from activitiesByProject minus read ids
+    const activitySummary = useMemo(() => {
+        const entries: { projectId: string; count: number; latestAt: number }[] = [];
+        Object.entries(activitiesByProject || {}).forEach(([pid, acts]) => {
+            const unread = acts.filter(a => !readActivityIds.has(String(a.id)));
+            if (unread.length > 0) {
+                const latest = Math.max(...unread.map(a => new Date(a.createdAt).getTime()));
+                entries.push({ projectId: pid, count: unread.length, latestAt: latest });
+            }
+        });
+        // sort by latest first
+        entries.sort((a,b)=> b.latestAt - a.latestAt);
+        const total = entries.reduce((s,e)=> s+e.count, 0);
+        return { entries, total };
+    }, [activitiesByProject, readActivityIds]);
+
+    // When opening a project’s activity, mark currently visible ones as read
+    const openActivityForProject = (pid: string) => {
+        setActivityProjectId(pid);
+        setIsActivityOpen(true);
+        // mark current list as read
+        const acts = (activitiesByProject?.[pid] || []) as Activity[];
+        if (acts.length) {
+            setReadActivityIds(prev => {
+                const next = new Set(prev);
+                acts.forEach(a => next.add(String(a.id)));
+                return next;
+            });
+        }
+        setActivityMenuOpen(false);
+    };
+
+    // Ensure activities are loaded across projects when opening the bell menu
+    React.useEffect(() => {
+        if (!activityMenuOpen) return;
+        const loadAll = async () => {
+            try {
+                await Promise.all(
+                    (projects || []).map(p => reloadActivitiesForProject(String(p.id)).catch(() => null))
+                );
+            } catch {}
+        };
+        loadAll();
+    }, [activityMenuOpen, projects, reloadActivitiesForProject]);
 
     const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
 
@@ -101,6 +153,61 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                     title={pageTitle}
                     rightContent={
                         <div className="flex items-center gap-2">
+                                                                                    <div className="relative">
+                                                                                        <button
+                                                                                            onClick={() => {
+                                                                                                setActivityMenuOpen(v => !v);
+                                                                                                // Clear badge: mark all current as read when clicked
+                                                                                                const allUnreadIds: string[] = [];
+                                                                                                Object.values(activitiesByProject || {}).forEach((acts: any) => {
+                                                                                                    (acts as Activity[]).forEach(a => {
+                                                                                                        const id = String(a.id);
+                                                                                                        if (!readActivityIds.has(id)) allUnreadIds.push(id);
+                                                                                                    });
+                                                                                                });
+                                                                                                if (allUnreadIds.length) {
+                                                                                                    setReadActivityIds(prev => {
+                                                                                                        const next = new Set(prev);
+                                                                                                        allUnreadIds.forEach(id => next.add(id));
+                                                                                                        return next;
+                                                                                                    });
+                                                                                                }
+                                                                                            }}
+                                                                                            className="relative flex items-center justify-center p-1 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
+                                                                                            aria-label="Activity notifications"
+                                                                                            title="Activity notifications"
+                                                                                        >
+                                                                                            <BellIcon className="w-5 h-5" />
+                                                                                            {activitySummary.total > 0 && (
+                                                                                                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[10px] leading-4 text-center">
+                                                                                                    {activitySummary.total > 99 ? '99+' : activitySummary.total}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </button>
+                                                                                        {activityMenuOpen && (
+                                                                                            <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-md shadow-lg z-50">
+                                                                                                <div className="py-2 max-h-72 overflow-auto">
+                                                                                                    {activitySummary.entries.length === 0 ? (
+                                                                                                        <div className="px-3 py-2 text-sm text-gray-500">No new activity</div>
+                                                                                                    ) : (
+                                                                                                        activitySummary.entries.map(({ projectId, count }) => {
+                                                                                                            const p = projects.find(pr => pr.id === projectId);
+                                                                                                            return (
+                                                                                                                <button
+                                                                                                                    key={projectId}
+                                                                                                                    onClick={() => openActivityForProject(projectId)}
+                                                                                                                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between"
+                                                                                                                >
+                                                                                                                    <span className="truncate mr-2">{p?.name || `Project ${projectId}`}</span>
+                                                                                                                    <span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-blue-600 text-white text-[11px]">{count}</span>
+                                                                                                                </button>
+                                                                                                            );
+                                                                                                        })
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
                             <button
                                 onClick={() => setIsManageTeamModalOpen(true)}
                                 className="flex items-center justify-center p-1 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
@@ -166,6 +273,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                         onDeleteFile={handleDeleteFile}
                         onOpenHPUSizing={() => setIsHPUSizingModalOpen(true)}
                         onOpenEstimateCalculator={() => setIsEstimateCalculatorOpen(true)}
+                        isActive={activeView === 'pipeline'}
                     />
                 </div>
             </div>
@@ -228,6 +336,15 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                     teamMembers={teamMembers}
                     onUpdateProjectPrice={handleUpdateProjectPriceAndCloseModal}
                     onClose={() => setIsEstimateCalculatorOpen(false)}
+                />
+            )}
+            {/* Global Activity slide-over to ensure visibility of the button in header */}
+            {activityProjectId && (
+                <ActivitySlideOver
+                    open={isActivityOpen}
+            onClose={() => setIsActivityOpen(false)}
+            projectId={activityProjectId}
+            activities={(activitiesByProject?.[activityProjectId] || []) as Activity[]}
                 />
             )}
         </div>

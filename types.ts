@@ -126,6 +126,7 @@ export interface Activity {
     type: ActivityType;
     content: string;
     createdBy?: string | null; // team member id or username
+    createdByName?: string | null;
     createdAt: string; // ISO timestamp
 }
 

@@ -8,6 +8,7 @@ import { ContactCard } from './ContactCard';
 import { ProductInfo } from './ProductInfo';
 import { PencilIcon, DollarIcon, PercentIcon, UploadIcon, DownloadIcon, TrashIcon, FileIcon, FileDocIcon, FilePdfIcon, CalculatorIcon, WrenchScrewdriverIcon } from './icons';
 import { useData } from '../context/DataContext';
+import ActivitySlideOver from './ActivitySlideOver';
 
 interface ProjectDetailsProps {
     project: Project;
@@ -19,6 +20,7 @@ interface ProjectDetailsProps {
     onDeleteFile: (projectId: string, fileId: string) => void;
     onOpenHPUSizing: () => void;
     onOpenEstimateCalculator: () => void;
+    isActive?: boolean;
 }
 
 const getCurrencySymbol = (currency: Currency): string => {
@@ -60,12 +62,23 @@ const stageProgress: { [key in ProjectStage]: number } = {
 
 const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON];
 
-export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator }) => {
+export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator, isActive = false }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity } = useData();
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [taskFilter, setTaskFilter] = useState<'all' | 'open' | 'done' | 'overdue' | 'dueSoon'>('all');
-    const [newNote, setNewNote] = useState('');
+    const [activityOpen, setActivityOpen] = useState(false);
+
+    // Close the Activity panel whenever the Pipeline view is (re)activated or project changes
+    React.useEffect(() => {
+        if (!isActive) {
+            setActivityOpen(false);
+        }
+    }, [isActive]);
+    React.useEffect(() => {
+        // when switching project inside pipeline, keep it closed until user clicks the button
+        setActivityOpen(false);
+    }, [project?.id]);
     
     const findCompany = (id: string) =>
         companies.find(c => String(c.id) === String(id)) ||
@@ -128,6 +141,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     const isPriceEstimated = project.pricePerVessel !== undefined && project.pricePerVessel > 0;
 
     return (
+        <>
         <div className="space-y-6 mt-0">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                 <div className="flex justify-between items-start">
@@ -145,50 +159,6 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                         </p>
                          <p className="text-sm text-gray-500 dark:text-gray-400">Closing Date: {new Date(project.closingDate).toLocaleDateString()}</p>
                     </div>
-
-                    {/* Activity Log */}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                        <div className="flex items-center justify-between mb-3">
-                            <h2 className="text-xl font-semibold">Activity</h2>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    value={newNote}
-                                    onChange={(e)=> setNewNote(e.target.value)}
-                                    placeholder="Add a note..."
-                                    className="px-2 py-1 text-sm rounded border dark:border-gray-700 bg-white dark:bg-gray-900 w-72"
-                                />
-                                <button
-                                    onClick={async ()=>{
-                                        const content = newNote.trim();
-                                        if (!content) return;
-                                        try {
-                                            await handleAddActivity(project.id, { type: 'note', content });
-                                            setNewNote('');
-                                        } catch (e: any) {
-                                            alert(`Failed to add note: ${e?.message || 'Unknown error'}`);
-                                        }
-                                    }}
-                                    className="px-2 py-1 text-sm rounded bg-blue-600 text-white"
-                                >
-                                    Add
-                                </button>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            {(activitiesByProject?.[project.id] || []).map((a: Activity) => (
-                                <div key={a.id} className="p-2 rounded border dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
-                                    <div className="text-xs text-gray-500 flex items-center justify-between">
-                                        <span>{new Date(a.createdAt).toLocaleString()}</span>
-                                        <span>{a.type}</span>
-                                    </div>
-                                    <div className="text-sm text-gray-800 dark:text-gray-100 whitespace-pre-wrap">{a.content}</div>
-                                </div>
-                            ))}
-                            {!(activitiesByProject?.[project.id] || []).length && (
-                                <p className="text-sm text-gray-500">No activity yet.</p>
-                            )}
-                        </div>
-                    </div>
                      <div className="text-right">
                          <div className="flex items-center justify-end space-x-2">
                              <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
@@ -203,6 +173,13 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                 aria-label="Edit Project"
                             >
                                 <PencilIcon className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={() => setActivityOpen(true)}
+                                className="px-3 py-1.5 text-sm rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                aria-label="View Activity"
+                            >
+                                View Activity
                             </button>
                         </div>
                         {salesRep ? (
@@ -521,6 +498,13 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                     </div>
                 </div>
             </div>
-        </div>
+    </div>
+        <ActivitySlideOver
+            open={activityOpen}
+            onClose={() => setActivityOpen(false)}
+            projectId={project.id}
+            activities={(activitiesByProject?.[project.id] || []) as Activity[]}
+        />
+    </>
     );
 };

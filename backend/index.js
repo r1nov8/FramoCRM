@@ -255,7 +255,7 @@ app.get('/api/projects', async (req, res) => {
 });
 
 // Add a project (accept full payload)
-app.post('/api/projects', async (req, res) => {
+app.post('/api/projects', requireAuth, async (req, res) => {
   try {
     const b = req.body || {};
     // Basic required fields
@@ -303,10 +303,16 @@ app.post('/api/projects', async (req, res) => {
 });
 
 // Update a project (partial update)
-app.put('/api/projects/:id', async (req, res) => {
+app.put('/api/projects/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const b = req.body || {};
+    // Load current row for diff
+    let before = null;
+    try {
+      const r0 = await pool.query('SELECT * FROM projects WHERE id = $1', [id]);
+      before = r0.rows[0] || null;
+    } catch {}
     const map = {
       name: 'name',
       opportunityNumber: 'opportunity_number',
@@ -352,7 +358,42 @@ app.put('/api/projects/:id', async (req, res) => {
       values
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(projectRowToApi(rows[0]));
+    const updated = rows[0];
+    try {
+      // Compute diffs but only include curated fields and avoid noisy date strings
+      const fields = ['number_of_vessels','pumps_per_vessel','price_per_vessel','vessel_size','vessel_size_unit','fuel_type','stage','value','currency','gross_margin_percent'];
+      const labels = {
+        number_of_vessels: 'number_of_vessels',
+        pumps_per_vessel: 'pumps_per_vessel',
+        price_per_vessel: 'price_per_vessel',
+        vessel_size: 'vessel_size',
+        vessel_size_unit: 'vessel_size_unit',
+        fuel_type: 'fuel_type',
+        stage: 'stage',
+        value: 'value',
+        currency: 'currency',
+        gross_margin_percent: 'gross_margin_percent'
+      };
+      const changes = [];
+      if (before) {
+        for (const f of fields) {
+          const a = before[f];
+          const c = updated[f];
+          const av = a === null || a === undefined ? '' : String(a);
+          const cv = c === null || c === undefined ? '' : String(c);
+          if (av !== cv) {
+            const k = labels[f] || f;
+            changes.push(`${k}: ${av || '—'} → ${cv || '—'}`);
+          }
+        }
+      }
+      const content = changes.length ? `Project updated\n${changes.join('\n')}` : 'Project updated';
+      await pool.query(
+        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5)',
+        [id, 'status_change', content, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
+      );
+    } catch {}
+    res.json(projectRowToApi(updated));
   } catch (err) {
     console.error('Update project error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -680,7 +721,7 @@ app.get('/api/projects/:id/tasks', async (req, res) => {
   }
 });
 
-app.post('/api/projects/:id/tasks', async (req, res) => {
+app.post('/api/projects/:id/tasks', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, status = 'open', dueDate = null, assignedTo = null, notes = null, priority = 2 } = req.body || {};
@@ -689,17 +730,30 @@ app.post('/api/projects/:id/tasks', async (req, res) => {
       'INSERT INTO tasks (project_id, title, status, due_date, assigned_to, notes, priority) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
       [id, title, status, dueDate, assignedTo ? Number(assignedTo) : null, notes, priority]
     );
-    res.status(201).json(taskRowToApi(rows[0]));
+    const created = rows[0];
+    try {
+      await pool.query(
+        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5)',
+        [id, 'note', `Task created: ${title}`, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
+      );
+    } catch {}
+    res.status(201).json(taskRowToApi(created));
   } catch (err) {
     console.error('Add task error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.put('/api/tasks/:taskId', async (req, res) => {
+app.put('/api/tasks/:taskId', requireAuth, async (req, res) => {
   try {
     const { taskId } = req.params;
     const b = req.body || {};
+    // Load before for diff
+    let before = null;
+    try {
+      const r0 = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+      before = r0.rows[0] || null;
+    } catch {}
     const map = {
       title: 'title',
       status: 'status',
@@ -724,17 +778,48 @@ app.put('/api/tasks/:taskId', async (req, res) => {
       values
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(taskRowToApi(rows[0]));
+    const updated = rows[0];
+    try {
+      // Compute diffs on common fields; omit due_date string noise if it’s unchanged or trivial
+      const fields = ['title','status','assigned_to','priority','due_date'];
+      const changes = [];
+      if (before) {
+        for (const f of fields) {
+          const a = before[f];
+          const c = updated[f];
+          const av = a === null || a === undefined ? '' : String(a);
+          const cv = c === null || c === undefined ? '' : String(c);
+          if (av !== cv) {
+            changes.push(`${f}: ${av || '—'} → ${cv || '—'}`);
+          }
+        }
+      }
+      const content = changes.length ? `Task updated\n${changes.join('\n')}` : 'Task updated';
+      await pool.query(
+        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ((SELECT project_id FROM tasks WHERE id=$1), $2, $3, $4, $5)',
+        [taskId, 'note', content, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
+      );
+    } catch {}
+    res.json(taskRowToApi(updated));
   } catch (err) {
     console.error('Update task error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.delete('/api/tasks/:taskId', async (req, res) => {
+app.delete('/api/tasks/:taskId', requireAuth, async (req, res) => {
   try {
     const { taskId } = req.params;
-    await pool.query('DELETE FROM tasks WHERE id = $1', [taskId]);
+    const { rows: r } = await pool.query('DELETE FROM tasks WHERE id = $1 RETURNING project_id, title', [taskId]);
+    const row = r[0];
+    try {
+      if (row) {
+        await pool.query(
+          'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5)',
+          [row.project_id, 'note', `Task deleted: ${row.title || taskId}`, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
+        );
+      }
+    } catch {}
     res.status(204).end();
   } catch (err) {
     console.error('Delete task error:', err);
@@ -750,6 +835,7 @@ function activityRowToApi(r) {
     type: r.type || 'note',
     content: r.content,
     createdBy: r.created_by !== null && r.created_by !== undefined ? String(r.created_by) : null,
+  createdByName: r.created_by_name || null,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
   };
 }
@@ -770,9 +856,19 @@ app.post('/api/projects/:id/activities', async (req, res) => {
     const { id } = req.params;
     const { type = 'note', content, createdBy = null } = req.body || {};
     if (!content || !String(content).trim()) return res.status(400).json({ error: 'Missing content' });
+    // If caller included Authorization, attribute using token
+    let user = null;
+    try {
+      const auth = req.headers.authorization;
+      if (auth && auth.startsWith('Bearer ')) {
+        user = jwt.verify(auth.split(' ')[1], JWT_SECRET);
+      }
+    } catch {}
+    const createdById = user?.id ?? (createdBy ? Number(createdBy) : null);
+    const createdByName = user?.username ?? null;
     const { rows } = await pool.query(
-      'INSERT INTO activities (project_id, type, content, created_by) VALUES ($1, $2, $3, $4) RETURNING *',
-      [id, type, content, createdBy ? Number(createdBy) : null]
+      'INSERT INTO activities (project_id, type, content, created_by, created_by_name) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [id, type, content, createdById, createdByName]
     );
     res.status(201).json(activityRowToApi(rows[0]));
   } catch (err) {
