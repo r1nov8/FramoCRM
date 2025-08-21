@@ -147,7 +147,7 @@ const CompanyInfoPage: React.FC = () => {
                     </button>
                     <button title="Edit selected (Company Website)" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
                         const ids = Array.from(selectedRows);
-                        if (ids.length !== 1) return alert('Select exactly one row to edit.');
+                        if (!ids.length) return alert('Select a row to edit.');
                         const id = ids[0] as string | number;
                         const row = companies.find((c:any)=> String(c.id)===String(id));
                         const current = row?.['Company Website'] || '';

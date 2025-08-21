@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataGrid, SelectColumn } from 'react-data-grid';
 import type { Column, SortColumn, RowsChangeData } from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
@@ -33,6 +33,8 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
   const selectedRows = props.selectedRows ?? internalSelectedRows;
   const setSelectedRows = props.onSelectedRowsChange ?? setInternalSelectedRows;
   const [sortColumns, setSortColumns] = useState<readonly SortColumn[]>([]);
+  // Local rows state for optimistic edits
+  const [rows, setRows] = useState<Row[]>([]);
 
   const rowKeyGetter = useCallback((r: Row) => r.id, []);
 
@@ -47,6 +49,11 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
     return direction === 'DESC' ? sorted.reverse() : sorted;
   }, [companies, sortColumns]);
 
+  // Keep local rows in sync with companies/sort changes
+  useEffect(() => {
+    setRows(sortedRows);
+  }, [sortedRows]);
+
   const columns: readonly Column<Row>[] = useMemo(() => {
     return [
       SelectColumn,
@@ -56,12 +63,16 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
         width: c.width,
         resizable: true,
         sortable: true,
-        editable: true,
+  editable: true,
+  editorOptions: { editOnClick: true },
       }))
     ];
   }, []);
 
   const onRowsChange = async (updatedRows: Row[], data: RowsChangeData<Row, unknown>) => {
+    // Optimistically update UI, keep snapshot for rollback on failure
+    const prevRowsSnapshot = rows;
+    setRows(updatedRows);
     const idx = (data as any).indexes?.[0];
     if (idx == null) return;
     const prev = sortedRows[idx];
@@ -71,8 +82,13 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
     for (const c of CSV_COLUMNS) {
       if (prev[c.key] !== next[c.key]) diff[c.key] = next[c.key];
     }
-    if (Object.keys(diff).length) {
+    if (!Object.keys(diff).length) return;
+    try {
       await handleUpdateCompany({ id: next.id, ...diff });
+    } catch (e) {
+      // Revert UI if save fails
+      setRows(prevRowsSnapshot);
+      alert('Failed to save change. Please try again.');
     }
   };
 
@@ -81,7 +97,7 @@ export default function CompanyInfoGrid(props: CompanyInfoGridProps) {
       <div className="flex-1 min-h-0">
         <DataGrid
           columns={columns}
-          rows={sortedRows}
+          rows={rows}
           rowKeyGetter={rowKeyGetter}
           onRowsChange={onRowsChange}
           selectedRows={selectedRows}
