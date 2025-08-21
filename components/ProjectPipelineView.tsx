@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ProjectListSidebar } from './Sidebar';
 import { ProjectDetails } from './DealDetails';
 import type { Project, Company, Contact, TeamMember } from '../types';
@@ -35,6 +35,12 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
     onOpenEstimateCalculator,
 }) => {
     // Import UI removed as part of rollback
+    // Ensure a project is selected so details/tools are visible
+    useEffect(() => {
+        if (!selectedProjectId && projects && projects.length > 0) {
+            onSelectProject(projects[0].id);
+        }
+    }, [selectedProjectId, projects]);
 
     return (
         <div className="flex flex-1 h-full min-h-0 items-stretch">

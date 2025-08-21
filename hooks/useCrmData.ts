@@ -35,6 +35,18 @@ export const useCrmData = () => {
     });
 
     useEffect(() => saveToLocalStorage('crm_projects', projects), [projects]);
+    const fetchProjects = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/projects`);
+            const data = await res.json();
+            if (Array.isArray(data) && data.length) {
+                setProjects(data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch projects:', err);
+        }
+    };
+
 
     // --- Moved handleUpdateTeamMember here so it's defined before return ---
     const handleUpdateTeamMember = async (member: TeamMember) => {
@@ -115,6 +127,7 @@ export const useCrmData = () => {
     };
 
     // Initial loads
+    useEffect(() => { fetchProjects(); }, []);
     useEffect(() => { fetchCompanies(); }, []);
 
     useEffect(() => { fetchContacts(); }, []);
@@ -438,6 +451,7 @@ export const useCrmData = () => {
         handleDeleteFile,
     handleUpdateProjectPrice,
     // Expose reload helpers for components to refresh after imports, etc.
+    reloadProjects: fetchProjects,
     reloadCompanies: fetchCompanies,
     reloadContacts: fetchContacts,
     reloadTeamMembers: fetchTeamMembers

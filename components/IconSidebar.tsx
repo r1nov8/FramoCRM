@@ -1,8 +1,6 @@
 import React from 'react';
-import { SearchIcon, LayoutGridIcon, NewspaperIcon } from './icons';
-import { FileIcon } from './icons';
+import { SearchIcon, LayoutGridIcon, NewspaperIcon, FileIcon } from './icons';
 
-type View = 'dashboard' | 'pipeline' | 'companyInfo';
 type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files';
 
 interface IconSidebarProps {

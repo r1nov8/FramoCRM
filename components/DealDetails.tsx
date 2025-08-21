@@ -72,7 +72,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     const designCompany = project.designCompanyId ? findCompany(project.designCompanyId) : undefined;
     const primaryContact = project.primaryContactId ? findContact(project.primaryContactId) : undefined;
 
-    const currentStageIndex = stageProgress[project.stage];
+    const currentStageIndex = stageProgress[project.stage] ?? 1;
     const currencySymbol = getCurrencySymbol(project.currency);
 
     const progressColor =
@@ -96,7 +96,8 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     const showGrossMargin = project.grossMarginPercent !== undefined && [ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON].includes(project.stage);
     const showHedgeCurrency = project.hedgeCurrency && [ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON, ProjectStage.LOST, ProjectStage.CANCELLED].includes(project.stage);
     
-    const showTools = [ProjectStage.RFQ, ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON].includes(project.stage);
+    // Always show tools to make calculators accessible at any stage
+    const showTools = true;
 
 
     const handleFileUploadClick = () => {

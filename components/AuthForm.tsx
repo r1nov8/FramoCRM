@@ -10,21 +10,33 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/login`, {
+      const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      if (mode === 'register') {
+        // Create the user first
+        const regRes = await fetch(`${base}/api/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const regData = await regRes.json();
+        if (!regRes.ok) throw new Error(regData.error || 'Registration failed');
+      }
+      // Then login to obtain JWT and user info
+      const res = await fetch(`${base}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Unknown error');
-  // Assume backend returns user info as { token, user: { name, initials } }
-  onAuthSuccess(data.token, data.user || { name: username, initials: username.slice(0, 2).toUpperCase() });
+      if (!res.ok) throw new Error(data.error || 'Invalid credentials');
+      onAuthSuccess(data.token, data.user || { name: username, initials: username.slice(0, 2).toUpperCase() });
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -39,8 +51,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg w-full max-w-sm flex flex-col items-center"
       >
         <img src="/framo-logo.png" alt="Framo Logo" className="h-16 mb-4" />
-        <h2 className="text-2xl font-bold mb-2 text-center text-blue-800 dark:text-blue-200">Sign in to Framo CRM</h2>
-        <p className="mb-6 text-gray-500 text-center">Welcome back! Please sign in to your account.</p>
+  <h2 className="text-2xl font-bold mb-2 text-center text-blue-800 dark:text-blue-200">{mode === 'login' ? 'Sign in to Framo CRM' : 'Create your account'}</h2>
+  <p className="mb-6 text-gray-500 text-center">{mode === 'login' ? 'Welcome back! Please sign in to your account.' : 'Create an account to continue.'}</p>
         <input
           className="w-full mb-3 p-3 border border-blue-200 dark:border-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
           type="text"
@@ -64,7 +76,14 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
           type="submit"
           disabled={loading}
         >
-          {loading ? 'Please wait...' : 'Sign in'}
+          {loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : 'Create account'}
+        </button>
+        <button
+          className="text-blue-600 hover:underline text-sm"
+          type="button"
+          onClick={() => setMode(m => (m === 'login' ? 'register' : 'login'))}
+        >
+          {mode === 'login' ? 'Need an account? Register' : 'Have an account? Sign in'}
         </button>
       </form>
       <div className="mt-6 text-gray-400 text-xs text-center">&copy; {new Date().getFullYear()} Framo. All rights reserved.</div>
