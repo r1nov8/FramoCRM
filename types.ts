@@ -46,6 +46,11 @@ export enum ProductType {
     HYDRAULIC_MODULE = 'Hydraulic Module',
 }
 
+export enum ProjectType {
+    FUEL_TRANSFER = 'Fuel Transfer',
+    ANTI_HEELING = 'Anti-Heeling',
+}
+
 export enum Currency {
     USD = 'USD',
     EUR = 'EUR',
@@ -133,6 +138,7 @@ export interface Activity {
 export interface Project {
     id:string;
     name: string;
+    projectType?: ProjectType;
     opportunityNumber: string;
     orderNumber?: string;
     stage: ProjectStage;

@@ -39,6 +39,7 @@ export const useCrmData = () => {
     });
     const [tasksByProject, setTasksByProject] = useState<Record<string, Task[]>>({});
     const [activitiesByProject, setActivitiesByProject] = useState<Record<string, Activity[]>>({});
+    const [unreadSummary, setUnreadSummary] = useState<{ entries: { projectId: string; count: number }[]; total: number }>({ entries: [], total: 0 });
 
     useEffect(() => saveToLocalStorage('crm_projects', projects), [projects]);
     const authHeaders = () => {
@@ -51,11 +52,21 @@ export const useCrmData = () => {
         try {
             const res = await fetch(`${API_URL}/api/projects`);
             const data = await res.json();
-            if (Array.isArray(data) && data.length) {
-                setProjects(data);
+            if (Array.isArray(data)) {
+                if (data.length) {
+                    setProjects(data);
+                } else {
+                    console.warn('[useCrmData] /api/projects returned empty list; using demo seed for visibility');
+                    setProjects(INITIAL_PROJECTS);
+                }
+            } else {
+                console.warn('[useCrmData] /api/projects returned unexpected payload; using demo seed');
+                setProjects(INITIAL_PROJECTS);
             }
         } catch (err) {
             console.error('Failed to fetch projects:', err);
+            // Fallback to demo data so UI isn’t blank in dev
+            setProjects(INITIAL_PROJECTS);
         }
     };
 
@@ -78,6 +89,32 @@ export const useCrmData = () => {
             setActivitiesByProject(prev => ({ ...prev, [projectId]: Array.isArray(data) ? data : [] }));
         } catch (err) {
             console.error('Failed to fetch activities:', err);
+        }
+    };
+
+    const fetchUnreadSummary = async () => {
+        if (MOCK) { return; }
+        try {
+            const res = await fetch(`${API_URL}/api/activities/unread-summary`, { headers: { ...authHeaders() } });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data && typeof data.total === 'number' && Array.isArray(data.entries)) {
+                setUnreadSummary({ total: data.total, entries: data.entries.map((e: any) => ({ projectId: String(e.projectId), count: Number(e.count) })) });
+            }
+        } catch (err) {
+            console.error('Failed to fetch unread summary:', err);
+        }
+    };
+
+    const markProjectActivitiesRead = async (projectId: string) => {
+        if (MOCK) { return; }
+        try {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}/activities/mark-read`, { method: 'POST', headers: { ...authHeaders() } });
+            if (!res.ok) return;
+            // Refresh summary after marking read
+            try { await fetchUnreadSummary(); } catch {}
+        } catch (err) {
+            console.error('Failed to mark read:', err);
         }
     };
 
@@ -118,10 +155,15 @@ export const useCrmData = () => {
         try {
             const res = await fetch(`${API_URL}/api/companies`);
             const data = await res.json();
-            setCompanies(Array.isArray(data) ? data : []);
+            if (Array.isArray(data) && data.length) {
+                setCompanies(data as any);
+            } else {
+                console.warn('[useCrmData] /api/companies empty or invalid; using demo seed');
+                setCompanies(INITIAL_COMPANIES);
+            }
         } catch (err) {
             console.error('Failed to fetch companies:', err);
-            setCompanies([]);
+            setCompanies(INITIAL_COMPANIES);
         }
     };
 
@@ -130,10 +172,15 @@ export const useCrmData = () => {
         try {
             const res = await fetch(`${API_URL}/api/contacts`);
             const data = await res.json();
-            setContacts(Array.isArray(data) ? data : []);
+            if (Array.isArray(data) && data.length) {
+                setContacts(data as any);
+            } else {
+                console.warn('[useCrmData] /api/contacts empty or invalid; using demo seed');
+                setContacts(INITIAL_CONTACTS);
+            }
         } catch (err) {
             console.error('Failed to fetch contacts:', err);
-            setContacts([]);
+            setContacts(INITIAL_CONTACTS);
         }
     };
 
@@ -142,7 +189,8 @@ export const useCrmData = () => {
         try {
             const res = await fetch(`${API_URL}/api/team-members`);
             const data = await res.json();
-            setTeamMembers((Array.isArray(data) ? data : []).map((m: any) => {
+            const list = Array.isArray(data) ? data : [];
+            const normalized = list.map((m: any) => {
                 const hasSplit = m.first_name || m.last_name;
                 let first = m.first_name;
                 let last = m.last_name;
@@ -160,15 +208,26 @@ export const useCrmData = () => {
                     jobTitle: m.job_title ?? m.jobTitle,
                     name: `${first || ''} ${last || ''}`.trim()
                 };
-            }));
+            });
+            if (normalized.length) {
+                setTeamMembers(normalized);
+            } else {
+                console.warn('[useCrmData] /api/team-members empty or invalid; using demo seed');
+                // Seed team with demo initials so header avatar resolves
+                setTeamMembers(INITIAL_TEAM_MEMBERS.map((t: any) => ({
+                    ...t,
+                    first_name: t.first_name || (t.name?.split(' ')[0] || ''),
+                    last_name: t.last_name || (t.name?.split(' ').slice(1).join(' ') || ''),
+                })) as any);
+            }
         } catch (err) {
             console.error('Failed to fetch team members:', err);
-            setTeamMembers([]);
+            setTeamMembers(INITIAL_TEAM_MEMBERS as any);
         }
     };
 
     // Initial loads
-    useEffect(() => { if (!MOCK) fetchProjects(); }, []);
+    useEffect(() => { if (!MOCK) { fetchProjects(); fetchUnreadSummary(); } }, []);
     useEffect(() => { if (!MOCK) fetchCompanies(); }, []);
 
     useEffect(() => { if (!MOCK) fetchContacts(); }, []);
@@ -187,6 +246,36 @@ export const useCrmData = () => {
         if (selectedProjectId) fetchTasksForProject(selectedProjectId);
     if (selectedProjectId) fetchActivitiesForProject(selectedProjectId);
     }, [selectedProjectId]);
+
+    // Lightweight polling for unread summary while app is visible and user is authed
+    useEffect(() => {
+        if (MOCK) return;
+        const POLL_MS = 45000; // 45s
+        let timer: number | undefined;
+
+        const tick = async () => {
+            try {
+                const hasToken = !!localStorage.getItem('token');
+                if (!hasToken) return; // only poll when logged in
+                if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return; // pause in background
+                await fetchUnreadSummary();
+            } catch {}
+        };
+
+        // Start interval
+        timer = window.setInterval(tick, POLL_MS);
+
+        // Also refresh when tab becomes visible again
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') tick();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+
+        return () => {
+            if (timer) window.clearInterval(timer);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
+    }, []);
 
 
 
@@ -417,10 +506,13 @@ export const useCrmData = () => {
 
     const handleDeleteCompany = async (id: string | number) => {
         if (MOCK) { setCompanies(prev => prev.filter(c => c.id !== id)); return; }
+        // If ID isn't numeric (e.g., a local draft), just remove locally and skip server
+        const idNum = Number(id);
+        if (!Number.isInteger(idNum)) { setCompanies(prev => prev.filter(c => c.id !== id)); return; }
         try {
-            const res = await fetch(`${API_URL}/api/companies/${id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/companies/${idNum}`, { method: 'DELETE' });
             if (!res.ok && res.status !== 204) throw new Error('Failed to delete company');
-            setCompanies(prev => prev.filter(c => c.id !== id));
+            setCompanies(prev => prev.filter(c => String(c.id) !== String(idNum)));
         } catch (err) {
             console.error('Delete company error:', err);
             throw err;
@@ -648,8 +740,11 @@ export const useCrmData = () => {
     handleUpdateTask,
     handleDeleteTask,
     activitiesByProject,
+    unreadSummary,
     handleAddActivity,
     reloadActivitiesForProject: fetchActivitiesForProject,
+    reloadUnreadSummary: fetchUnreadSummary,
+    markProjectActivitiesRead,
     // Expose reload helpers for components to refresh after imports, etc.
     reloadProjects: fetchProjects,
     reloadCompanies: fetchCompanies,

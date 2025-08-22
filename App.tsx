@@ -19,7 +19,7 @@ import { ManageTeamModal } from './components/ManageTeamModal';
 import { HPUSizingModal } from './components/HPUSizingModal';
 import { EstimateCalculatorModal } from './components/EstimateCalculatorModal';
 import type { Project, Company, Contact, Currency, Activity } from './types';
-import { CompanyType } from './types';
+import { CompanyType, ProjectType } from './types';
 import { useData } from './context/DataContext';
 import ActivitySlideOver from './components/ActivitySlideOver';
 
@@ -50,9 +50,13 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
     handleUpdateProjectPrice,
         activitiesByProject,
         reloadActivitiesForProject,
+        unreadSummary,
+        reloadUnreadSummary,
+        markProjectActivitiesRead,
     } = useData();
 
     const [isAddProjectModalOpen, setIsAddProjectModalOpen] = useState(false);
+    const [newProjectType, setNewProjectType] = useState<ProjectType>(ProjectType.FUEL_TRANSFER);
     const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
     const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
     const [isAddCompanyModalOpen, setIsAddCompanyModalOpen] = useState(false);
@@ -65,37 +69,15 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
     const [isActivityOpen, setIsActivityOpen] = useState(false);
     const [activityMenuOpen, setActivityMenuOpen] = useState(false);
     const [activityProjectId, setActivityProjectId] = useState<string | null>(null);
-    const [readActivityIds, setReadActivityIds] = useState<Set<string>>(new Set());
-
-    // Compute unread counts per project from activitiesByProject minus read ids
-    const activitySummary = useMemo(() => {
-        const entries: { projectId: string; count: number; latestAt: number }[] = [];
-        Object.entries(activitiesByProject || {}).forEach(([pid, acts]) => {
-            const unread = acts.filter(a => !readActivityIds.has(String(a.id)));
-            if (unread.length > 0) {
-                const latest = Math.max(...unread.map(a => new Date(a.createdAt).getTime()));
-                entries.push({ projectId: pid, count: unread.length, latestAt: latest });
-            }
-        });
-        // sort by latest first
-        entries.sort((a,b)=> b.latestAt - a.latestAt);
-        const total = entries.reduce((s,e)=> s+e.count, 0);
-        return { entries, total };
-    }, [activitiesByProject, readActivityIds]);
+    // Use server unread summary
+    const activitySummary = unreadSummary;
 
     // When opening a project’s activity, mark currently visible ones as read
     const openActivityForProject = (pid: string) => {
         setActivityProjectId(pid);
         setIsActivityOpen(true);
-        // mark current list as read
-        const acts = (activitiesByProject?.[pid] || []) as Activity[];
-        if (acts.length) {
-            setReadActivityIds(prev => {
-                const next = new Set(prev);
-                acts.forEach(a => next.add(String(a.id)));
-                return next;
-            });
-        }
+    // mark current list as read on the server and refresh summary
+    markProjectActivitiesRead(pid).then(() => reloadUnreadSummary()).catch(() => {});
         setActivityMenuOpen(false);
     };
 
@@ -107,10 +89,11 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 await Promise.all(
                     (projects || []).map(p => reloadActivitiesForProject(String(p.id)).catch(() => null))
                 );
+                await reloadUnreadSummary();
             } catch {}
         };
         loadAll();
-    }, [activityMenuOpen, projects, reloadActivitiesForProject]);
+    }, [activityMenuOpen, projects, reloadActivitiesForProject, reloadUnreadSummary]);
 
     // Do not show Activity when navigating to Pipeline via sidebar; only open via explicit buttons
     React.useEffect(() => {
@@ -166,21 +149,10 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                                                                                         <button
                                                                                             onClick={() => {
                                                                                                 setActivityMenuOpen(v => !v);
-                                                                                                // Clear badge: mark all current as read when clicked
-                                                                                                const allUnreadIds: string[] = [];
-                                                                                                Object.values(activitiesByProject || {}).forEach((acts: any) => {
-                                                                                                    (acts as Activity[]).forEach(a => {
-                                                                                                        const id = String(a.id);
-                                                                                                        if (!readActivityIds.has(id)) allUnreadIds.push(id);
-                                                                                                    });
-                                                                                                });
-                                                                                                if (allUnreadIds.length) {
-                                                                                                    setReadActivityIds(prev => {
-                                                                                                        const next = new Set(prev);
-                                                                                                        allUnreadIds.forEach(id => next.add(id));
-                                                                                                        return next;
-                                                                                                    });
-                                                                                                }
+                                                                                                // Clear badge by marking all project activities as read for projects currently listed
+                                                                                                unreadSummary.entries.forEach(e => markProjectActivitiesRead(e.projectId).catch(()=>{}));
+                                                                                                // refresh summary after clearing
+                                                                                                reloadUnreadSummary().catch(()=>{});
                                                                                             }}
                                                                                             className="relative flex items-center justify-center p-1 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
                                                                                             aria-label="Activity notifications"
@@ -278,7 +250,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                         teamMembers={teamMembers}
                         selectedProjectId={selectedProjectId}
                         onSelectProject={setSelectedProjectId}
-                        onAddProjectClick={() => setIsAddProjectModalOpen(true)}
+                        onAddProjectClick={(type) => { setNewProjectType(type); setIsAddProjectModalOpen(true); }}
                         onEditProject={handleOpenEditModal}
                         selectedProject={selectedProject}
                         onUploadFiles={handleUploadFiles}
@@ -292,6 +264,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
             </div>
             {isAddProjectModalOpen && (
                 <AddProjectModal
+                    projectType={newProjectType}
                     onAddProject={handleAddProjectAndCloseModal}
                     onClose={() => setIsAddProjectModalOpen(false)}
                     companies={companies}

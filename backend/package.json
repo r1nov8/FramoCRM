@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "node index.js",
-    "cleanup:companies": "node scripts/cleanup_companies.js"
+  "start": "node index.js",
+  "migrate": "node scripts/run_migrations.js",
+  "cleanup:companies": "node scripts/cleanup_companies.js",
+  "diag:project-types": "node scripts/report_project_types.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

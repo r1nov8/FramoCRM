@@ -43,23 +43,24 @@ if (!process.env.FILE_SHARE_ROOT && !process.env.G_DRIVE_PATH && process.platfor
 const allowedOrigins = (process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
   : [
-      'https://framocrm-1.onrender.com',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  // Additional local dev ports used by Vite when 5173 is taken
-  'http://localhost:5174',
-  'http://127.0.0.1:5174'
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      // Additional local dev ports used by Vite when 5173 is taken
+      'http://localhost:5174',
+      'http://127.0.0.1:5174'
     ]);
 
 app.use(cors({
   origin: function (origin, callback) {
     // allow requests with no origin (like mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    const okList = allowedOrigins.includes(origin);
+    const allowOnrender = process.env.ALLOW_ONRENDER === 'true';
+    const isOnRender = /\.onrender\.com$/i.test((origin || '').replace(/^https?:\/\//, '').split('/')[0] || '');
+    if (okList || (allowOnrender && isOnRender)) {
       return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'), false);
     }
+    return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true
 }));
@@ -70,6 +71,24 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://crmuser:crmpassword@localhost:5432/crmdb',
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
+
+// Ensure required tables exist (idempotent safety for dev)
+(async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS activity_reads (
+        id SERIAL PRIMARY KEY,
+        activity_id INTEGER NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(activity_id, user_id)
+      )`);
+  // Ensure project_type exists on projects (idempotent)
+  await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_type TEXT');
+  } catch (e) {
+    console.warn('Warning: failed ensuring activity_reads table:', e?.message || e);
+  }
+})();
 
 // --- Filesystem helpers (secure path resolution) ---
 function resolveSafe(base, ...segments) {
@@ -223,6 +242,7 @@ function projectRowToApi(r) {
   return {
     id: String(r.id),
     name: r.name,
+  projectType: r.project_type || undefined,
     opportunityNumber: r.opportunity_number,
     orderNumber: r.order_number || undefined,
     stage: r.stage,
@@ -263,12 +283,13 @@ app.post('/api/projects', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     const cols = [
-      'name','opportunity_number','order_number','stage','value','currency','hedge_currency','gross_margin_percent','closing_date',
+      'name','project_type','opportunity_number','order_number','stage','value','currency','hedge_currency','gross_margin_percent','closing_date',
       'sales_rep_id','shipyard_id','vessel_owner_id','design_company_id','primary_contact_id','notes','number_of_vessels','pumps_per_vessel',
       'price_per_vessel','vessel_size','vessel_size_unit','fuel_type'
     ];
     const vals = [
       b.name,
+      b.projectType || null,
       b.opportunityNumber,
       b.orderNumber || null,
       b.stage,
@@ -315,6 +336,7 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
     } catch {}
     const map = {
       name: 'name',
+      projectType: 'project_type',
       opportunityNumber: 'opportunity_number',
       orderNumber: 'order_number',
       stage: 'stage',
@@ -388,10 +410,15 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
         }
       }
       const content = changes.length ? `Project updated\n${changes.join('\n')}` : 'Project updated';
-      await pool.query(
-        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5)',
+      const ins = await pool.query(
+        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
         [id, 'status_change', content, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
       );
+      try {
+        if (req.user?.id && ins.rows[0]?.id) {
+          await pool.query('INSERT INTO activity_reads (activity_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id]);
+        }
+      } catch {}
     } catch {}
     res.json(projectRowToApi(updated));
   } catch (err) {
@@ -523,8 +550,9 @@ app.put('/api/companies/:id', async (req, res) => {
 
 app.delete('/api/companies/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    await pool.query('DELETE FROM companies WHERE id = $1', [id]);
+    const idNum = Number(req.params.id);
+    if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
+    await pool.query('DELETE FROM companies WHERE id = $1', [idNum]);
     res.status(204).end();
   } catch (err) {
     console.error('Delete company error:', err);
@@ -580,8 +608,9 @@ app.put('/api/contacts/:id', async (req, res) => {
 
 app.delete('/api/contacts/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    await pool.query('DELETE FROM contacts WHERE id = $1', [id]);
+    const idNum = Number(req.params.id);
+    if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
+    await pool.query('DELETE FROM contacts WHERE id = $1', [idNum]);
     res.status(204).end();
   } catch (err) {
     console.error('Delete contact error:', err);
@@ -633,8 +662,9 @@ app.put('/api/products/:id', async (req, res) => {
 
 app.delete('/api/products/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    await pool.query('DELETE FROM products WHERE id = $1', [id]);
+    const idNum = Number(req.params.id);
+    if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
+    await pool.query('DELETE FROM products WHERE id = $1', [idNum]);
     res.status(204).end();
   } catch (err) {
     console.error('Delete product error:', err);
@@ -670,8 +700,9 @@ app.post('/api/project-files', async (req, res) => {
 
 app.delete('/api/project-files/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    await pool.query('DELETE FROM project_files WHERE id = $1', [id]);
+    const idNum = Number(req.params.id);
+    if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
+    await pool.query('DELETE FROM project_files WHERE id = $1', [idNum]);
     res.status(204).end();
   } catch (err) {
     console.error('Delete project file error:', err);
@@ -732,10 +763,15 @@ app.post('/api/projects/:id/tasks', requireAuth, async (req, res) => {
     );
     const created = rows[0];
     try {
-      await pool.query(
-        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5)',
+      const ins = await pool.query(
+        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
         [id, 'note', `Task created: ${title}`, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
       );
+      try {
+        if (req.user?.id && ins.rows[0]?.id) {
+          await pool.query('INSERT INTO activity_reads (activity_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id]);
+        }
+      } catch {}
     } catch {}
     res.status(201).json(taskRowToApi(created));
   } catch (err) {
@@ -795,10 +831,15 @@ app.put('/api/tasks/:taskId', requireAuth, async (req, res) => {
         }
       }
       const content = changes.length ? `Task updated\n${changes.join('\n')}` : 'Task updated';
-      await pool.query(
-        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ((SELECT project_id FROM tasks WHERE id=$1), $2, $3, $4, $5)',
+      const ins = await pool.query(
+        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ((SELECT project_id FROM tasks WHERE id=$1), $2, $3, $4, $5) RETURNING id',
         [taskId, 'note', content, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
       );
+      try {
+        if (req.user?.id && ins.rows[0]?.id) {
+          await pool.query('INSERT INTO activity_reads (activity_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id]);
+        }
+      } catch {}
     } catch {}
     res.json(taskRowToApi(updated));
   } catch (err) {
@@ -814,10 +855,15 @@ app.delete('/api/tasks/:taskId', requireAuth, async (req, res) => {
     const row = r[0];
     try {
       if (row) {
-        await pool.query(
-          'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5)',
+        const ins = await pool.query(
+          'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
           [row.project_id, 'note', `Task deleted: ${row.title || taskId}`, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
         );
+        try {
+          if (req.user?.id && ins.rows[0]?.id) {
+            await pool.query('INSERT INTO activity_reads (activity_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id]);
+          }
+        } catch {}
       }
     } catch {}
     res.status(204).end();
@@ -870,9 +916,55 @@ app.post('/api/projects/:id/activities', async (req, res) => {
       'INSERT INTO activities (project_id, type, content, created_by, created_by_name) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [id, type, content, createdById, createdByName]
     );
+    try {
+      if (createdById) {
+        await pool.query('INSERT INTO activity_reads (activity_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [rows[0].id, createdById]);
+      }
+    } catch {}
     res.status(201).json(activityRowToApi(rows[0]));
   } catch (err) {
     console.error('Add activity error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Unread activity summary for current user
+app.get('/api/activities/unread-summary', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rows } = await pool.query(
+      `SELECT a.project_id, COUNT(*)::int AS count, MAX(a.id) AS latest_id
+       FROM activities a
+       LEFT JOIN activity_reads r ON r.activity_id = a.id AND r.user_id = $1
+       WHERE r.id IS NULL
+       GROUP BY a.project_id
+       ORDER BY MAX(a.id) DESC`,
+      [userId]
+    );
+    const entries = rows.map(r => ({ projectId: String(r.project_id), count: Number(r.count), latestId: String(r.latest_id) }));
+    const total = entries.reduce((s, e) => s + e.count, 0);
+    res.json({ entries, total });
+  } catch (err) {
+    console.error('Unread summary error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Mark all activities for a project as read for current user
+app.post('/api/projects/:id/activities/mark-read', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const result = await pool.query(
+      `INSERT INTO activity_reads (activity_id, user_id)
+       SELECT a.id, $1 FROM activities a
+       WHERE a.project_id = $2
+       ON CONFLICT DO NOTHING`,
+      [userId, id]
+    );
+    res.json({ marked: result.rowCount || 0 });
+  } catch (err) {
+    console.error('Mark read error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -895,8 +987,9 @@ app.post('/api/team-members', async (req, res) => {
 // Delete a team member
 app.delete('/api/team-members/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    await pool.query('DELETE FROM team_members WHERE id = $1', [id]);
+    const idNum = Number(req.params.id);
+    if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
+    await pool.query('DELETE FROM team_members WHERE id = $1', [idNum]);
     res.status(204).end();
   } catch (err) {
     console.error('Delete team member error:', err);
@@ -918,6 +1011,24 @@ app.put('/api/team-members/:id', async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('Update team member error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Diagnostics: project type counts ---
+app.get('/api/diagnostics/project-type-counts', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT COALESCE(NULLIF(TRIM(project_type), ''), 'UNKNOWN') AS type, COUNT(*)::int AS count
+       FROM projects
+       GROUP BY COALESCE(NULLIF(TRIM(project_type), ''), 'UNKNOWN')
+       ORDER BY 1`
+    );
+    const data = {};
+    for (const r of rows) data[r.type] = Number(r.count);
+    res.json({ counts: data });
+  } catch (err) {
+    console.error('Diagnostics project-type-counts error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { ProjectListSidebar } from './Sidebar';
 import { ProjectDetails } from './DealDetails';
 import type { Project, Company, Contact, TeamMember } from '../types';
+import { ProjectType } from '../types';
 
 interface ProjectPipelineViewProps {
     projects: Project[];
@@ -10,7 +11,7 @@ interface ProjectPipelineViewProps {
     teamMembers: TeamMember[];
     selectedProjectId: string | null;
     onSelectProject: (id: string) => void;
-    onAddProjectClick: () => void;
+    onAddProjectClick: (type: ProjectType) => void;
     onEditProject: (project: Project) => void;
     selectedProject: Project | null;
     onUploadFiles: (projectId: string, files: FileList) => void;

@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: framo-crm-backend
+    env: node
+    rootDir: backend
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm run migrate && node index.js"
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FILES_ENABLED
+        value: "false"
+    autoDeploy: true
+    healthCheckPath: /api/contacts
+    envSpecific:
+      - name: production
+        envVars:
+          - key: DATABASE_URL
+            sync: false
+  - type: web
+    name: framo-crm-frontend
+    env: static
+    rootDir: .
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: framo-crm-backend
+          type: web
+          property: url
+    autoDeploy: true

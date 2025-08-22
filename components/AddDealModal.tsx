@@ -7,14 +7,77 @@ const VESSEL_TYPES = [
     'RoRo',
     'RoPax',
 ];
+// Expanded vessel types for Anti-Heeling
+const VESSEL_TYPES_AH = [
+    'Arctic support vessel',
+    'Barge',
+    'Booster pump',
+    'Bulk Carrier',
+    'Buoy & Light Tender vessel',
+    'Cable layer vessel (not VFD)',
+    'Cable layer vessel (VFD)',
+    'CON-PAX',
+    'CON-RO',
+    'Construction Service Vessel (CSV)',
+    'Container',
+    'Container & Reefer (crane)',
+    'Crane Vessel (not VFD)',
+    'Crane Vessel (VFD)',
+    'Cruise',
+    'CRV (Commissioning, Recycling Vessel)',
+    'CSOV (Commissioning Service Operation Vessel)',
+    'Diving Support',
+    'Double ended ferry',
+    'Dredger',
+    'Emergency Response and Rescue Vessel (ERRV)',
+    'Energy Construction Vessel (ECV)',
+    'Ferry',
+    'Fish farm vessel',
+    'Fish Feed Carrier',
+    'General Cargo',
+    'Heavy Construction Vessel',
+    'Heavy Lift Vessel',
+    'HLV (Heavy Lift Vessel)',
+    'Icebreaker',
+    'Light Offshore Energy Vessel',
+    'Main Installation Vessel (MIV) (not VFD)',
+    'Main Installation Vessel (MIV) (VFD)',
+    'Multi-Purpose Heavy Lift (MPHL)',
+    'Multi-Purpose MPV (not VFD)',
+    'None ship',
+    'OCV (Offshore Construction Vessel)',
+    'Offshore support (not VFD)',
+    'Offshore support (VFD required)',
+    'PCTC (Pure Car & Truck Carrier)',
+    'Pipe Layer vessel (not VFD)',
+    'Pontoon',
+    'Reefer',
+    'Refrigerated Carrier',
+    'Research Ship',
+    'Ro-Lo',
+    'ROPAX',
+    'RORO',
+    'Self-Elevating Platform (SEP) (VFD)',
+    'Service Operation Vessel (SOV)',
+    'Shallow water crane vessel',
+    'SSV (Subsea Support Vessel)',
+    'Subsea Support and Maintenance vessel',
+    'Train Ferry',
+    'Trawler',
+    'Wind Farm Service vessel',
+    'Wind Power Service Operation Vessel',
+    'Wind Turbine Install vessel (not VFD)',
+    'Wind Turbine Install vessel (VFD)'
+];
 import type { Company, Contact, Project, Product, TeamMember } from '../types';
-import { ProjectStage, ProductType, CompanyType, Currency, VesselSizeUnit, FuelType } from '../types';
+import { ProjectStage, ProductType, CompanyType, Currency, VesselSizeUnit, FuelType, ProjectType } from '../types';
 import { Modal } from './Modal';
 import { PlusIcon, TrashIcon } from './icons';
 
 interface AddProjectModalProps {
     onClose: () => void;
     onAddProject: (project: Omit<Project, 'id'>) => void;
+    projectType: ProjectType;
     companies: Company[];
     contacts: Contact[];
     teamMembers: TeamMember[];
@@ -27,7 +90,7 @@ const lateStagesForOrderNumber = [ProjectStage.ORDER_CONFIRMATION, ProjectStage.
 const stagesForGrossMargin = [ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON];
 const stagesForHedgeCurrency = [ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON, ProjectStage.LOST, ProjectStage.CANCELLED];
 
-export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAddProject, companies, contacts, teamMembers, projects, onAddCompanyClick, onAddContactClick }) => {
+export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAddProject, projectType, companies, contacts, teamMembers, projects, onAddCompanyClick, onAddContactClick }) => {
     // Defensive: ensure arrays are always defined
     companies = companies || [];
     contacts = contacts || [];
@@ -35,6 +98,14 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
 
     const [vesselType, setVesselType] = useState('');
     const [projectName, setProjectName] = useState('');
+    // Anti-Heeling specific fields
+    const [ahDate, setAhDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+    const [ahProjectNo, setAhProjectNo] = useState<string>('');
+    const [ahContracted, setAhContracted] = useState<'Yes' | 'No' | ''>('');
+    const [ahHull, setAhHull] = useState<string>('');
+    const [ahObp, setAhObp] = useState<'Yes' | 'No' | ''>('');
+    const [ahYardCountry, setAhYardCountry] = useState<string>('');
+    const [ahFrAbroad, setAhFrAbroad] = useState<string>('');
     // Find the highest OPP number and suggest the next one
     const highestOpp = useMemo(() => {
         const oppNumbers = companies
@@ -63,61 +134,115 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     const [designCompanyId, setDesignCompanyId] = useState('');
     const [primaryContactId, setPrimaryContactId] = useState('');
     const [notes, setNotes] = useState('');
-    const [products, setProducts] = useState<Product[]>([{ type: ProductType.SD_100, quantity: 1, capacity: 100, head: 100 }]);
+    const initialProducts: Product[] = projectType === ProjectType.ANTI_HEELING
+        ? []
+        : [{ type: ProductType.SD_100, quantity: 1, capacity: 100, head: 100 }];
+    const [products, setProducts] = useState<Product[]>(initialProducts);
     const [numberOfVessels, setNumberOfVessels] = useState(1);
     const [pumpsPerVessel, setPumpsPerVessel] = useState(1);
     const [vesselSize, setVesselSize] = useState<number | ''>('');
     const [vesselSizeUnit, setVesselSizeUnit] = useState<VesselSizeUnit>(VesselSizeUnit.DWT);
-    const [fuelType, setFuelType] = useState<FuelType>(FuelType.METHANOL);
+    const [fuelType, setFuelType] = useState<FuelType | ''>(projectType === ProjectType.ANTI_HEELING ? '' : FuelType.METHANOL);
+
+    // Created by first name (resolve via teamMembers by initials, fallback to first token of stored name)
+    const createdByFirstName = useMemo(() => {
+        try {
+            const raw = localStorage.getItem('user');
+            if (!raw) return '';
+            const u = JSON.parse(raw);
+            const initials = String(u?.initials || '').toLowerCase();
+            const tm = teamMembers.find(t => String(t.initials || '').toLowerCase() === initials);
+            if (tm?.first_name) return tm.first_name;
+            const name = String(u?.name || '');
+            return name.split(' ')[0] || '';
+        } catch { return ''; }
+    }, [teamMembers]);
+
+    // Derive Shipyard Country from selected company
+    useEffect(() => {
+        if (!shipyardId) { setAhYardCountry(''); return; }
+        const c = companies.find(c => String(c.id) === String(shipyardId));
+        setAhYardCountry(c?.location || '');
+    }, [shipyardId, companies]);
 
     const [oppError, setOppError] = useState<string | null>(null);
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            if (!projectName || !opportunityNumber || !salesRepId || !shipyardId || !currency) {
-                alert('Please fill in all required fields: Project Name, Opportunity No., Sales Rep, Shipyard, and Currency.');
-                return;
+            if (projectType === ProjectType.ANTI_HEELING) {
+                // Validate Anti-Heeling minimal required fields
+                if (!ahDate || !ahProjectNo || !shipyardId || !stage) {
+                    alert('Please fill in Project no, Status, and Shipyard.');
+                    return;
+                }
+            } else {
+                if (!projectName || !opportunityNumber || !salesRepId || !shipyardId || !currency) {
+                    alert('Please fill in all required fields: Project Name, Opportunity No., Sales Rep, Shipyard, and Currency.');
+                    return;
+                }
             }
-            // Check for duplicate OPP number
-            const duplicate = projects.some((p: any) => p.opportunityNumber === opportunityNumber);
+            // Check for duplicate project/opportunity number
+            const oppToCheck = projectType === ProjectType.ANTI_HEELING ? ahProjectNo : opportunityNumber;
+            const duplicate = projects.some((p: any) => p.opportunityNumber === oppToCheck);
             if (duplicate) {
                 setOppError('Opp. No in use');
                 return;
             } else {
                 setOppError(null);
             }
-            if (lateStagesForOrderNumber.includes(stage) && !orderNumber) {
+            if (projectType !== ProjectType.ANTI_HEELING && lateStagesForOrderNumber.includes(stage) && !orderNumber) {
                 alert('Please provide an Order No. for projects in this stage.');
                 return;
             }
-            if (stagesForHedgeCurrency.includes(stage) && !hedgeCurrency) {
+            if (projectType !== ProjectType.ANTI_HEELING && stagesForHedgeCurrency.includes(stage) && !hedgeCurrency) {
                 alert('Please select a Hedge Currency for projects in this stage.');
                 return;
             }
+            // Compute a sensible name for Anti-Heeling if not provided
+            const yardName = companies.find(c => String(c.id) === String(shipyardId))?.name || '';
+            const ownerName = companies.find(c => String(c.id) === String(vesselOwnerId))?.name || '';
+            const computedName = projectType === ProjectType.ANTI_HEELING
+                ? (projectName || `Anti-Heeling ${ahProjectNo || ownerName || yardName || ''}`)
+                : projectName;
+
+            // Compose additional notes for Anti-Heeling
+        const ahNotes = projectType === ProjectType.ANTI_HEELING
+                ? [
+            `Created: ${ahDate}${createdByFirstName ? ` by ${createdByFirstName}` : ''}`,
+                    `Contracted: ${ahContracted || '—'}`,
+                    `Vessel type: ${vesselType || '—'}`,
+                    `Hull: ${ahHull || '—'}`,
+                    `OBP?: ${ahObp || '—'}`,
+            `Shipyard Country: ${ahYardCountry || '—'}`,
+                    `Contact at FR Abroad: ${ahFrAbroad || '—'}`,
+                  ].join('\n')
+                : '';
+
             const projectData = {
-                name: projectName,
-                opportunityNumber,
+                name: computedName,
+                projectType,
+                opportunityNumber: oppToCheck,
                 orderNumber: orderNumber || undefined,
                 value: 0, // Initial value is 0, will be updated by calculator
                 currency,
                 hedgeCurrency: hedgeCurrency || undefined,
                 grossMarginPercent: typeof grossMarginPercent === 'number' ? grossMarginPercent : undefined,
-                closingDate,
+                closingDate: projectType === ProjectType.ANTI_HEELING ? ahDate : closingDate,
                 stage,
-                salesRepId,
+                salesRepId: projectType === ProjectType.ANTI_HEELING ? undefined : salesRepId,
                 shipyardId,
                 vesselOwnerId: vesselOwnerId || undefined,
                 designCompanyId: designCompanyId || undefined,
                 // Primary contact is optional
                 primaryContactId: primaryContactId || undefined,
                 products,
-                notes,
+                notes: projectType === ProjectType.ANTI_HEELING ? [ahNotes, notes].filter(Boolean).join('\n\n') : notes,
                 numberOfVessels,
                 pumpsPerVessel,
                 pricePerVessel: undefined, // Price is set via calculator
                 vesselSize: typeof vesselSize === 'number' ? vesselSize : undefined,
                 vesselSizeUnit: vesselSizeUnit || undefined,
-                fuelType,
+                fuelType: (fuelType || null) as any,
                 files: [],
             };
             console.log('[AddProjectModal] Submitting project:', projectData);
@@ -135,7 +260,10 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     };
     
     const addProduct = () => {
-        setProducts([...products, { type: ProductType.SD_100, quantity: 1, capacity: 100, head: 100 }]);
+        const next = projectType === ProjectType.ANTI_HEELING
+            ? { type: ProductType.HYDRAULIC_MODULE, quantity: 1, capacity: 0, head: 0 }
+            : { type: ProductType.SD_100, quantity: 1, capacity: 100, head: 100 };
+        setProducts([...products, next]);
     };
 
     const removeProduct = (index: number) => {
@@ -247,198 +375,307 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     };
 
     return (
-        <Modal isOpen={true} onClose={onClose} title="Add New Project">
+        <Modal isOpen={true} onClose={onClose} title={`Add New Project — ${projectType}` }>
             <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="projectName" className={labelClass}>Project Name</label>
-                        <input type="text" id="projectName" value={projectName} onChange={e => setProjectName(e.target.value)} className={inputClass} required />
-                    </div>
-                    <div>
-                        <label htmlFor="opportunityNumber" className={labelClass}>Opportunity No.</label>
-                        <input type="text" id="opportunityNumber" value={opportunityNumber} onChange={e => setOpportunityNumber(e.target.value)} className={inputClass + (oppError ? ' border-red-500' : '')} required />
-                        {oppError && <p className="text-red-500 text-xs mt-1">{oppError}</p>}
-                    </div>
-                </div>
-
-                 <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                    <h3 className="font-semibold mb-2 text-gray-800 dark:text-gray-200">Commercial Details</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                        <div className="flex flex-col justify-end">
-                            <label htmlFor="numberOfVessels" className={labelClass}>No. of Vessels</label>
-                            <input type="number" id="numberOfVessels" min="1" value={numberOfVessels} onChange={e => setNumberOfVessels(Number(e.target.value))} className={inputClass} />
+                {projectType === ProjectType.ANTI_HEELING ? (
+                    <>
+                        <div className="flex items-center justify-between">
+                            <div className="text-xs text-gray-500 dark:text-gray-400">Created {ahDate}{createdByFirstName ? ` by ${createdByFirstName}` : ''}</div>
                         </div>
-                        <div className="flex flex-col justify-end">
-                            <label htmlFor="pumpsPerVessel" className={labelClass}>Pumps per Vessel</label>
-                            <input type="number" id="pumpsPerVessel" min="1" value={pumpsPerVessel} onChange={e => setPumpsPerVessel(Number(e.target.value))} className={inputClass} />
-                        </div>
-                        <div className="flex flex-col justify-end">
-                            <label htmlFor="fuelType" className={labelClass}>Fuel Type</label>
-                            <select id="fuelType" value={fuelType} onChange={e => setFuelType(e.target.value as FuelType)} className={inputClass}>
-                                {Object.values(FuelType).map(u => <option key={u} value={u}>{u}</option>)}
-                            </select>
-                        </div>
-                        <div className="flex flex-col justify-end">
-                            <label htmlFor="vesselType" className={labelClass}>Vessel Type</label>
-                            <select id="vesselType" value={vesselType} onChange={e => setVesselType(e.target.value)} className={inputClass} required>
-                                <option value="">Select Vessel Type</option>
-                                {VESSEL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-                            </select>
-                        </div>
-                        {/* Vessel Size and Currency in same row for perfect alignment */}
-                        <div className="md:col-span-2 flex flex-row gap-6">
-                            <div className="flex flex-col flex-1 justify-end">
-                                <label htmlFor="vesselSize" className={labelClass}>Vessel Size</label>
-                                <div className="flex items-center gap-2">
-                                    <input type="number" id="vesselSize" min="0" value={vesselSize} onChange={e => setVesselSize(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass + ' flex-1'} />
-                                    <span className="inline-flex items-center px-3 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm h-9 ml-0">
-                                        {vesselType === 'RoRo' || vesselType === 'RoPax' ? 'LM' : vesselType === 'PCTC' ? 'CEU' : 'DWT'}
-                                    </span>
-                                </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className={labelClass}>Project no</label>
+                                <input type="text" value={ahProjectNo} onChange={e => setAhProjectNo(e.target.value)} className={inputClass + (oppError ? ' border-red-500' : '')} required />
+                                {oppError && <p className="text-red-500 text-xs mt-1">{oppError}</p>}
                             </div>
-                            <div className="flex flex-col flex-1 justify-end">
-                                <label htmlFor="currency" className={labelClass}>Default Currency</label>
-                                <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className={inputClass}>
-                                    {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className={labelClass}>Contracted</label>
+                                <select value={ahContracted} onChange={e => setAhContracted(e.target.value as any)} className={inputClass}>
+                                    <option value="">Select</option>
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className={labelClass}>Status</label>
+                                <select value={stage} onChange={e => setStage(e.target.value as ProjectStage)} className={inputClass}>
+                                    {Object.values(ProjectStage).map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className={labelClass}>Vessel type</label>
+                                <select value={vesselType} onChange={e => setVesselType(e.target.value)} className={inputClass}>
+                                    <option value="">Select Vessel Type</option>
+                                    {VESSEL_TYPES_AH.map(type => <option key={type} value={type}>{type}</option>)}
                                 </select>
                             </div>
                         </div>
-                    </div>
-                    <div className="flex justify-end items-center mt-2 min-h-[48px]">
-                        <span className="text-gray-500 dark:text-gray-300 italic text-lg font-semibold text-right">Total Project Value<br /><span className="text-base font-normal">To be estimated</span></span>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div>
-                        <label htmlFor="stage" className={labelClass}>Stage</label>
-                        <select id="stage" value={stage} onChange={e => setStage(e.target.value as ProjectStage)} className={inputClass}>
-                            {Object.values(ProjectStage).map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                     <div>
-                        <label htmlFor="closingDate" className={labelClass}>Closing Date</label>
-                        <input type="date" id="closingDate" value={closingDate} onChange={e => setClosingDate(e.target.value)} className={inputClass} />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {stagesForGrossMargin.includes(stage) && (
-                        <div>
-                            <label htmlFor="grossMargin" className={labelClass}>Gross Margin (%)</label>
-                            <input type="number" id="grossMargin" min="0" step="0.1" value={grossMarginPercent} onChange={e => setGrossMarginPercent(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className={labelClass}>Fuel type</label>
+                                <select value={fuelType || ''} onChange={e => setFuelType(e.target.value as FuelType)} className={inputClass}>
+                                    <option value="">Select</option>
+                                    {Object.values(FuelType).map(u => <option key={u} value={u}>{u}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className={labelClass}>Firm vessels</label>
+                                <input type="number" min={0} value={numberOfVessels} onChange={e => setNumberOfVessels(Number(e.target.value))} className={inputClass} />
+                            </div>
                         </div>
-                    )}
-                    {lateStagesForOrderNumber.includes(stage) && (
-                        <div>
-                            <label htmlFor="orderNumber" className={labelClass}>Order No.</label>
-                            <input type="text" id="orderNumber" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} className={inputClass} required />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <SearchableCompanySelect
+                                id="shipyard"
+                                label="Shipyard"
+                                value={shipyardId}
+                                onChange={setShipyardId}
+                                companies={companies}
+                                required
+                                onAddCompanyClick={() => onAddCompanyClick(CompanyType.SHIPYARD)}
+                            />
+                            <div>
+                                <label className={labelClass}>Hull</label>
+                                <input type="text" value={ahHull} onChange={e => setAhHull(e.target.value)} className={inputClass} />
+                            </div>
                         </div>
-                    )}
-                    {stagesForHedgeCurrency.includes(stage) && (
-                        <div>
-                            <label htmlFor="hedgeCurrency" className={labelClass}>Hedge Currency</label>
-                            <select id="hedgeCurrency" value={hedgeCurrency} onChange={e => setHedgeCurrency(e.target.value as Currency)} className={inputClass} required>
-                                <option value="">Select Hedge Currency</option>
-                                {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
-                    )}
-                </div>
-
-                 <div>
-                    <label htmlFor="salesRep" className={labelClass}>Sales Representative</label>
-                    <select id="salesRep" value={salesRepId} onChange={e => setSalesRepId(e.target.value)} className={inputClass} required>
-                        <option value="">Select Sales Rep</option>
-                        {teamMembers.map(tm => (
-                            <option key={tm.id} value={tm.id}>{tm.first_name} {tm.last_name}</option>
-                        ))}
-                    </select>
-                </div>
-
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <SearchableCompanySelect
-                        id="shipyard"
-                        label="Shipyard"
-                        value={shipyardId}
-                        onChange={setShipyardId}
-                        companies={companies}
-                        required
-                        onAddCompanyClick={() => onAddCompanyClick(CompanyType.SHIPYARD)}
-                    />
-                    <div>
-                        <label htmlFor="primaryContact" className={labelClass}>Primary Contact (Optional)</label>
-                        <div className="flex items-center space-x-2">
-                            <select id="primaryContact" value={primaryContactId} onChange={e => setPrimaryContactId(e.target.value)} className={inputClass}>
-                                <option value="">Select Contact</option>
-                                {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                             <button type="button" onClick={onAddContactClick} className={addButtonClass} aria-label="Add new contact">
-                                <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <SearchableCompanySelect
-                        id="vesselOwner"
-                        label="Vessel Owner (Optional)"
-                        value={vesselOwnerId}
-                        onChange={setVesselOwnerId}
-                        companies={companies}
-                        onAddCompanyClick={() => onAddCompanyClick(CompanyType.VESSEL_OWNER)}
-                    />
-                    <SearchableCompanySelect
-                        id="designCompany"
-                        label="Design Company (Optional)"
-                        value={designCompanyId}
-                        onChange={setDesignCompanyId}
-                        companies={companies}
-                        onAddCompanyClick={() => onAddCompanyClick(CompanyType.DESIGN_COMPANY)}
-                    />
-                </div>
-
-                <div>
-                    <h3 className={labelClass + " mt-4 mb-2"}>Products</h3>
-                    <div className="space-y-4">
-                        {products.map((p, i) => (
-                            <div key={i} className="p-3 border rounded-md dark:border-gray-600 space-y-2 relative">
-                                {products.length > 1 && (
-                                     <button type="button" onClick={() => removeProduct(i)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500" aria-label="Remove product">
-                                         <TrashIcon className="w-4 h-4" />
-                                     </button>
-                                )}
-                                <div className="grid grid-cols-2 gap-4">
-                                     <div>
-                                        <label className="text-xs text-gray-500">Product Type</label>
-                                        <select value={p.type} onChange={e => handleProductChange(i, 'type', e.target.value as ProductType)} className={inputClass}>
-                                            {Object.values(ProductType).map(pt => <option key={pt} value={pt}>{pt}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-gray-500">Quantity</label>
-                                        <input type="number" min="1" value={p.quantity} onChange={e => handleProductChange(i, 'quantity', Number(e.target.value))} className={inputClass} />
-                                    </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <SearchableCompanySelect
+                                id="owner"
+                                label="Owner"
+                                value={vesselOwnerId}
+                                onChange={setVesselOwnerId}
+                                companies={companies}
+                                onAddCompanyClick={() => onAddCompanyClick(CompanyType.VESSEL_OWNER)}
+                            />
+                            <div>
+                                <label htmlFor="ownerContact" className={labelClass}>Owner contact</label>
+                                <div className="flex items-center space-x-2">
+                                    <select id="ownerContact" value={primaryContactId} onChange={e => setPrimaryContactId(e.target.value)} className={inputClass}>
+                                        <option value="">Select Contact</option>
+                                        {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                    <button type="button" onClick={onAddContactClick} className={addButtonClass} aria-label="Add new contact">
+                                        <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                                    </button>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs text-gray-500">Capacity (m³/h)</label>
-                                        <input type="number" min="0" value={p.capacity} onChange={e => handleProductChange(i, 'capacity', Number(e.target.value))} className={inputClass} />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className={labelClass}>OBP?</label>
+                                <select value={ahObp} onChange={e => setAhObp(e.target.value as any)} className={inputClass}>
+                                    <option value="">Select</option>
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className={labelClass}>Shipyard Country</label>
+                                <input type="text" value={ahYardCountry} readOnly className={inputClass + ' bg-gray-50 dark:bg-gray-800'} />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Contact at FR Abroad</label>
+                                <input type="text" value={ahFrAbroad} onChange={e => setAhFrAbroad(e.target.value)} className={inputClass} />
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="projectName" className={labelClass}>Project Name</label>
+                                <input type="text" id="projectName" value={projectName} onChange={e => setProjectName(e.target.value)} className={inputClass} required />
+                            </div>
+                            <div>
+                                <label htmlFor="opportunityNumber" className={labelClass}>Opportunity No.</label>
+                                <input type="text" id="opportunityNumber" value={opportunityNumber} onChange={e => setOpportunityNumber(e.target.value)} className={inputClass + (oppError ? ' border-red-500' : '')} required />
+                                {oppError && <p className="text-red-500 text-xs mt-1">{oppError}</p>}
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                            <h3 className="font-semibold mb-2 text-gray-800 dark:text-gray-200">Commercial Details</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                <div className="flex flex-col justify-end">
+                                    <label htmlFor="numberOfVessels" className={labelClass}>No. of Vessels</label>
+                                    <input type="number" id="numberOfVessels" min="1" value={numberOfVessels} onChange={e => setNumberOfVessels(Number(e.target.value))} className={inputClass} />
+                                </div>
+                                <div className="flex flex-col justify-end">
+                                    <label htmlFor="pumpsPerVessel" className={labelClass}>Pumps per Vessel</label>
+                                    <input type="number" id="pumpsPerVessel" min="1" value={pumpsPerVessel} onChange={e => setPumpsPerVessel(Number(e.target.value))} className={inputClass} />
+                                </div>
+                                <div className="flex flex-col justify-end">
+                                    <label htmlFor="fuelType" className={labelClass}>Fuel Type</label>
+                                    <select id="fuelType" value={fuelType || ''} onChange={e => setFuelType(e.target.value as FuelType)} className={inputClass}>
+                                        {Object.values(FuelType).map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col justify-end">
+                                    <label htmlFor="vesselType" className={labelClass}>Vessel Type</label>
+                                    <select id="vesselType" value={vesselType} onChange={e => setVesselType(e.target.value)} className={inputClass} required>
+                                        <option value="">Select Vessel Type</option>
+                                        {VESSEL_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                                    </select>
+                                </div>
+                                {/* Vessel Size and Currency in same row for perfect alignment */}
+                                <div className="md:col-span-2 flex flex-row gap-6">
+                                    <div className="flex flex-col flex-1 justify-end">
+                                        <label htmlFor="vesselSize" className={labelClass}>Vessel Size</label>
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" id="vesselSize" min="0" value={vesselSize} onChange={e => setVesselSize(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass + ' flex-1'} />
+                                            <span className="inline-flex items-center px-3 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm h-9 ml-0">
+                                                {vesselType === 'RoRo' || vesselType === 'RoPax' ? 'LM' : vesselType === 'PCTC' ? 'CEU' : 'DWT'}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="text-xs text-gray-500">Head (mlc)</label>
-                                        <input type="number" min="0" value={p.head} onChange={e => handleProductChange(i, 'head', Number(e.target.value))} className={inputClass} />
+                                    <div className="flex flex-col flex-1 justify-end">
+                                        <label htmlFor="currency" className={labelClass}>Default Currency</label>
+                                        <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className={inputClass}>
+                                            {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                            <div className="flex justify-end items-center mt-2 min-h-[48px]">
+                                <span className="text-gray-500 dark:text-gray-300 italic text-lg font-semibold text-right">Total Project Value<br /><span className="text-base font-normal">To be estimated</span></span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="stage" className={labelClass}>Stage</label>
+                                <select id="stage" value={stage} onChange={e => setStage(e.target.value as ProjectStage)} className={inputClass}>
+                                    {Object.values(ProjectStage).map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="closingDate" className={labelClass}>Closing Date</label>
+                                <input type="date" id="closingDate" value={closingDate} onChange={e => setClosingDate(e.target.value)} className={inputClass} />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {stagesForGrossMargin.includes(stage) && (
+                                <div>
+                                    <label htmlFor="grossMargin" className={labelClass}>Gross Margin (%)</label>
+                                    <input type="number" id="grossMargin" min="0" step="0.1" value={grossMarginPercent} onChange={e => setGrossMarginPercent(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                                </div>
+                            )}
+                            {lateStagesForOrderNumber.includes(stage) && (
+                                <div>
+                                    <label htmlFor="orderNumber" className={labelClass}>Order No.</label>
+                                    <input type="text" id="orderNumber" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} className={inputClass} required />
+                                </div>
+                            )}
+                            {stagesForHedgeCurrency.includes(stage) && (
+                                <div>
+                                    <label htmlFor="hedgeCurrency" className={labelClass}>Hedge Currency</label>
+                                    <select id="hedgeCurrency" value={hedgeCurrency} onChange={e => setHedgeCurrency(e.target.value as Currency)} className={inputClass} required>
+                                        <option value="">Select Hedge Currency</option>
+                                        {Object.values(Currency).map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <label htmlFor="salesRep" className={labelClass}>Sales Representative</label>
+                            <select id="salesRep" value={salesRepId} onChange={e => setSalesRepId(e.target.value)} className={inputClass} required>
+                                <option value="">Select Sales Rep</option>
+                                {teamMembers.map(tm => (
+                                    <option key={tm.id} value={tm.id}>{tm.first_name} {tm.last_name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <SearchableCompanySelect
+                                id="shipyard"
+                                label="Shipyard"
+                                value={shipyardId}
+                                onChange={setShipyardId}
+                                companies={companies}
+                                required
+                                onAddCompanyClick={() => onAddCompanyClick(CompanyType.SHIPYARD)}
+                            />
+                            <div>
+                                <label htmlFor="primaryContact" className={labelClass}>Primary Contact (Optional)</label>
+                                <div className="flex items-center space-x-2">
+                                    <select id="primaryContact" value={primaryContactId} onChange={e => setPrimaryContactId(e.target.value)} className={inputClass}>
+                                        <option value="">Select Contact</option>
+                                        {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                    <button type="button" onClick={onAddContactClick} className={addButtonClass} aria-label="Add new contact">
+                                        <PlusIcon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <SearchableCompanySelect
+                                id="vesselOwner"
+                                label="Vessel Owner (Optional)"
+                                value={vesselOwnerId}
+                                onChange={setVesselOwnerId}
+                                companies={companies}
+                                onAddCompanyClick={() => onAddCompanyClick(CompanyType.VESSEL_OWNER)}
+                            />
+                            <SearchableCompanySelect
+                                id="designCompany"
+                                label="Design Company (Optional)"
+                                value={designCompanyId}
+                                onChange={setDesignCompanyId}
+                                companies={companies}
+                                onAddCompanyClick={() => onAddCompanyClick(CompanyType.DESIGN_COMPANY)}
+                            />
+                        </div>
+                    </>
+                )}
+
+                {projectType !== ProjectType.ANTI_HEELING && (
+                    <div>
+                        <h3 className={labelClass + " mt-4 mb-2"}>Products ({projectType})</h3>
+                        <div className="space-y-4">
+                            {products.map((p, i) => (
+                                <div key={i} className="p-3 border rounded-md dark:border-gray-600 space-y-2 relative">
+                                    {products.length > 1 && (
+                                        <button type="button" onClick={() => removeProduct(i)} className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500" aria-label="Remove product">
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs text-gray-500">Product Type</label>
+                                            <select value={p.type} onChange={e => handleProductChange(i, 'type', e.target.value as ProductType)} className={inputClass}>
+                                                {Object.values(ProductType).map(pt => <option key={pt} value={pt}>{pt}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-500">Quantity</label>
+                                            <input type="number" min="1" value={p.quantity} onChange={e => handleProductChange(i, 'quantity', Number(e.target.value))} className={inputClass} />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs text-gray-500">Capacity (m³/h)</label>
+                                            <input type="number" min="0" value={p.capacity} onChange={e => handleProductChange(i, 'capacity', Number(e.target.value))} className={inputClass} />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-500">Head (mlc)</label>
+                                            <input type="number" min="0" value={p.head} onChange={e => handleProductChange(i, 'head', Number(e.target.value))} className={inputClass} />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <button type="button" onClick={addProduct} className="mt-2 flex items-center text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                            <PlusIcon className="w-4 h-4 mr-1" /> Add Product
+                        </button>
                     </div>
-                     <button type="button" onClick={addProduct} className="mt-2 flex items-center text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                        <PlusIcon className="w-4 h-4 mr-1" /> Add Product
-                    </button>
-                </div>
+                )}
 
                 <div>
                     <label htmlFor="notes" className={labelClass}>Notes</label>

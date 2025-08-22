@@ -32,6 +32,15 @@ CREATE TABLE IF NOT EXISTS contacts (
   company_id INTEGER REFERENCES companies(id)
 );
 
+-- Team members table (must exist before projects due to FK)
+CREATE TABLE IF NOT EXISTS team_members (
+  id SERIAL PRIMARY KEY,
+  first_name VARCHAR(100) NOT NULL,
+  last_name VARCHAR(100) NOT NULL,
+  initials VARCHAR(10) NOT NULL,
+  job_title VARCHAR(255) NOT NULL
+);
+
 -- Projects table (extended)
 CREATE TABLE IF NOT EXISTS projects (
   id SERIAL PRIMARY KEY,
@@ -76,14 +85,4 @@ CREATE TABLE IF NOT EXISTS project_files (
   type VARCHAR(100),
   size INTEGER,
   content TEXT
-);
-
-
--- Team members table
-CREATE TABLE IF NOT EXISTS team_members (
-  id SERIAL PRIMARY KEY,
-  first_name VARCHAR(100) NOT NULL,
-  last_name VARCHAR(100) NOT NULL,
-  initials VARCHAR(10) NOT NULL,
-  job_title VARCHAR(255) NOT NULL
 );

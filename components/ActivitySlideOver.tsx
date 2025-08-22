@@ -41,6 +41,7 @@ export const ActivitySlideOver: React.FC<ActivitySlideOverProps> = ({ open, onCl
     if (!id) return null;
     return teamMembers.find(m => String(m.id) === String(id)) || null;
   };
+  const toTitleCase = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
 
   const onSend = async () => {
     const content = text.trim();
@@ -95,8 +96,8 @@ export const ActivitySlideOver: React.FC<ActivitySlideOverProps> = ({ open, onCl
                     ) : groups[col].map(a => {
                       const you = currentUsername && a.createdByName && a.createdByName === currentUsername;
                       const member = findMember(a.createdBy || null);
-                      const displayName = a.createdByName || `${member?.first_name ?? ''} ${member?.last_name ?? ''}`.trim() || 'Unknown';
-                      const initials = member?.initials || (displayName ? displayName.slice(0,2).toUpperCase() : '??');
+                      const displayFirst = member?.first_name || toTitleCase(String(a.createdByName || '').split(/[\s@.]+/)[0] || '');
+                      const initials = member?.initials || (displayFirst ? displayFirst.slice(0,2).toUpperCase() : '??');
                       return (
                         <div key={a.id} className={`flex ${you ? 'justify-end' : 'justify-start'} items-end gap-2`}>
                           {!you && (
@@ -105,9 +106,7 @@ export const ActivitySlideOver: React.FC<ActivitySlideOverProps> = ({ open, onCl
                             </div>
                           )}
                           <div className={`max-w-[78%] ${you ? 'items-end text-right' : 'items-start'} flex flex-col`}>
-                            <div className={`text-[11px] text-gray-500 dark:text-gray-400 mb-1 ${you ? 'self-end' : 'self-start'}`}>
-                              {displayName}
-                            </div>
+                            <div className={`text-[11px] text-gray-500 dark:text-gray-400 mb-1 ${you ? 'self-end' : 'self-start'}`}>{displayFirst || 'Unknown'}</div>
                             <div className={`rounded-2xl px-3 py-2 shadow-sm border leading-relaxed ${you ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700'}`}>
                               <div className="text-xs mb-0.5 opacity-70 capitalize">{a.type.replace('_',' ')}</div>
                               <div className="text-sm whitespace-pre-wrap">{a.content}</div>
