@@ -1,7 +1,51 @@
 import { useState, useEffect } from 'react';
 
-// Helper to get API URL from env or fallback
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// Helper to get API URL with runtime overrides and Render heuristic
+function resolveApiBase(): string {
+    // Build-time env from Vite
+    const envUrl = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
+
+    // URL param override (?api=https://backend.example.com)
+    try {
+        if (typeof window !== 'undefined') {
+            const q = new URLSearchParams(window.location.search);
+            const api = q.get('api');
+            if (api && /^https?:\/\//i.test(api)) {
+                localStorage.setItem('api_url_override', api);
+                // Clean the URL so param doesn't stick around
+                const url = new URL(window.location.href);
+                url.searchParams.delete('api');
+                window.history.replaceState({}, '', url.toString());
+            }
+        }
+    } catch {}
+
+    // LocalStorage override takes precedence
+    try {
+        if (typeof localStorage !== 'undefined') {
+            const o = localStorage.getItem('api_url_override');
+            if (o && /^https?:\/\//i.test(o)) return o;
+        }
+    } catch {}
+
+    if (envUrl && /^https?:\/\//i.test(envUrl)) return envUrl;
+
+    // Heuristic: if hosted on Render static site, try swapping the subdomain to backend
+    try {
+        if (typeof window !== 'undefined') {
+            const host = window.location.hostname; // e.g., framo-crm-frontend.onrender.com
+            if (/\.onrender\.com$/i.test(host)) {
+                const guess = host.replace('framo-crm-frontend', 'framo-crm-backend');
+                return `${window.location.protocol}//${guess}`;
+            }
+        }
+    } catch {}
+
+    // Last resort: localhost (dev)
+    return 'http://localhost:4000';
+}
+
+export const API_URL = resolveApiBase();
 const MOCK = (() => {
     const v = String(import.meta.env.VITE_MOCK_MODE ?? '').toLowerCase().trim();
     return v === '1' || v === 'true' || v === 'yes';
