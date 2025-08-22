@@ -1,4 +1,5 @@
 import React from 'react';
+import { BUILD_INFO } from '../buildInfo';
 import { UsersIcon } from './icons';
 
 interface HeaderProps {
@@ -14,7 +15,12 @@ export const Header: React.FC<HeaderProps> = ({ title, rightContent }) => {
             <h1 className="text-lg font-bold text-gray-800 dark:text-white ml-12">
                 {title}
             </h1>
-            <div className="flex items-center">{rightContent}</div>
+            <div className="flex items-center gap-3">
+                <span title={`Commit ${BUILD_INFO.commit} — built ${new Date(BUILD_INFO.builtAt).toLocaleString()}`} className="hidden sm:inline-flex items-center px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs border border-gray-200 dark:border-gray-600">
+                    build {BUILD_INFO.commitShort}
+                </span>
+                {rightContent}
+            </div>
         </header>
     );
 };

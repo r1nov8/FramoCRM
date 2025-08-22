@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+  "dev": "vite",
+  "prebuild": "node scripts/gen-build-info.cjs",
+  "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
