@@ -112,6 +112,15 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
         loadAll();
     }, [activityMenuOpen, projects, reloadActivitiesForProject]);
 
+    // Do not show Activity when navigating to Pipeline via sidebar; only open via explicit buttons
+    React.useEffect(() => {
+        if (activeView === 'pipeline') {
+            setIsActivityOpen(false);
+            setActivityProjectId(null);
+            setActivityMenuOpen(false);
+        }
+    }, [activeView]);
+
     const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
 
     const handleAddProjectAndCloseModal = (newProject: Omit<Project, 'id'>) => {
@@ -190,15 +199,18 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                                                                                                     {activitySummary.entries.length === 0 ? (
                                                                                                         <div className="px-3 py-2 text-sm text-gray-500">No new activity</div>
                                                                                                     ) : (
-                                                                                                        activitySummary.entries.map(({ projectId, count }) => {
-                                                                                                            const p = projects.find(pr => pr.id === projectId);
+                                                                                                                                                activitySummary.entries.map(({ projectId, count }) => {
+                                                                                                                                                    const p = projects.find(pr => pr.id === projectId);
+                                                                                                                                                    const label = p
+                                                                                                                                                        ? `[${p.opportunityNumber || 'OPP?'}] ${p.name}`
+                                                                                                                                                        : `Project ${projectId}`;
                                                                                                             return (
                                                                                                                 <button
                                                                                                                     key={projectId}
                                                                                                                     onClick={() => openActivityForProject(projectId)}
                                                                                                                     className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between"
                                                                                                                 >
-                                                                                                                    <span className="truncate mr-2">{p?.name || `Project ${projectId}`}</span>
+                                                                                                                                                            <span className="truncate mr-2">{label}</span>
                                                                                                                     <span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-blue-600 text-white text-[11px]">{count}</span>
                                                                                                                 </button>
                                                                                                             );
@@ -274,6 +286,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                         onOpenHPUSizing={() => setIsHPUSizingModalOpen(true)}
                         onOpenEstimateCalculator={() => setIsEstimateCalculatorOpen(true)}
                         isActive={activeView === 'pipeline'}
+                        onOpenActivity={(pid) => openActivityForProject(pid)}
                     />
                 </div>
             </div>

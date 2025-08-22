@@ -18,6 +18,7 @@ interface ProjectPipelineViewProps {
     onOpenHPUSizing: () => void;
     onOpenEstimateCalculator: () => void;
     isActive?: boolean;
+    onOpenActivity: (projectId: string) => void;
 }
 
 export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
@@ -35,6 +36,7 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
     onOpenHPUSizing,
     onOpenEstimateCalculator,
     isActive = false,
+    onOpenActivity,
 }) => {
     // Import UI removed as part of rollback
     // Ensure a project is selected so details/tools are visible
@@ -66,6 +68,7 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
                         onOpenHPUSizing={onOpenHPUSizing}
                         onOpenEstimateCalculator={onOpenEstimateCalculator}
                         isActive={isActive}
+                        onOpenActivity={onOpenActivity}
                     />
                 ) : (
                     <div className="flex items-center justify-center h-full">

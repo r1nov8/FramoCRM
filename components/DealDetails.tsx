@@ -8,7 +8,6 @@ import { ContactCard } from './ContactCard';
 import { ProductInfo } from './ProductInfo';
 import { PencilIcon, DollarIcon, PercentIcon, UploadIcon, DownloadIcon, TrashIcon, FileIcon, FileDocIcon, FilePdfIcon, CalculatorIcon, WrenchScrewdriverIcon } from './icons';
 import { useData } from '../context/DataContext';
-import ActivitySlideOver from './ActivitySlideOver';
 
 interface ProjectDetailsProps {
     project: Project;
@@ -21,6 +20,7 @@ interface ProjectDetailsProps {
     onOpenHPUSizing: () => void;
     onOpenEstimateCalculator: () => void;
     isActive?: boolean;
+    onOpenActivity: (projectId: string) => void;
 }
 
 const getCurrencySymbol = (currency: Currency): string => {
@@ -62,23 +62,12 @@ const stageProgress: { [key in ProjectStage]: number } = {
 
 const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON];
 
-export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator, isActive = false }) => {
+export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator, isActive = false, onOpenActivity }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity } = useData();
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [taskFilter, setTaskFilter] = useState<'all' | 'open' | 'done' | 'overdue' | 'dueSoon'>('all');
-    const [activityOpen, setActivityOpen] = useState(false);
-
-    // Close the Activity panel whenever the Pipeline view is (re)activated or project changes
-    React.useEffect(() => {
-        if (!isActive) {
-            setActivityOpen(false);
-        }
-    }, [isActive]);
-    React.useEffect(() => {
-        // when switching project inside pipeline, keep it closed until user clicks the button
-        setActivityOpen(false);
-    }, [project?.id]);
+    // Activity panel managed at App level
     
     const findCompany = (id: string) =>
         companies.find(c => String(c.id) === String(id)) ||
@@ -175,7 +164,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                 <PencilIcon className="w-5 h-5" />
                             </button>
                             <button
-                                onClick={() => setActivityOpen(true)}
+                                onClick={() => onOpenActivity(project.id)}
                                 className="px-3 py-1.5 text-sm rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
                                 aria-label="View Activity"
                             >
@@ -499,12 +488,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                 </div>
             </div>
     </div>
-        <ActivitySlideOver
-            open={activityOpen}
-            onClose={() => setActivityOpen(false)}
-            projectId={project.id}
-            activities={(activitiesByProject?.[project.id] || []) as Activity[]}
-        />
+    {/* ActivitySlideOver is rendered globally in App */}
     </>
     );
 };
