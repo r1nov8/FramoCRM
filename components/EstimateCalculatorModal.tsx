@@ -1217,21 +1217,6 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                     </div>
                     
                     <div className="space-y-2 self-end">
-                        {isAH && (
-                            <div className="p-2 mb-2 bg-green-50 dark:bg-green-900/30 rounded-md">
-                                <div className="font-semibold mb-1">Startup (Commissioning)</div>
-                                <div className="flex items-center gap-2">
-                                    <label className="text-xs text-gray-500 dark:text-gray-400">Location</label>
-                                    <select value={startupLocation} onChange={e => setStartupLocation(e.target.value)} className="flex-1 p-1 bg-transparent border rounded-md dark:border-gray-600">
-                                        {Object.keys((PRICING_DATA.antiHeeling?.startupLocations as any) || {}).map(k => (
-                                            <option key={k} value={k}>{k}</option>
-                                        ))}
-                                    </select>
-                                    <div className="ml-auto font-semibold">{fmtInt(startupCost)}</div>
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Average total (3 days incl. travel etc.).</div>
-                            </div>
-                        )}
                         {isAH && (() => {
                             const classItem = lineItems.find(i => i.isClassCert);
                             const societies = Object.keys((PRICING_DATA.antiHeeling?.classCertification as any) || {});
@@ -1261,11 +1246,26 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                     </div>
                                     <div className="flex justify-between items-center mt-2">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">Amount</span>
-                                        <span className="font-semibold">{amount.toLocaleString('en-US')}</span>
+                                        <span className="font-semibold">{fmtInt(amount)}</span>
                                     </div>
                                 </div>
                             );
                         })()}
+                        {isAH && (
+                            <div className="p-2 mb-2 bg-green-50 dark:bg-green-900/30 rounded-md">
+                                <div className="font-semibold mb-1">Startup (Commissioning)</div>
+                                <div className="flex items-center gap-2">
+                                    <label className="text-xs text-gray-500 dark:text-gray-400">Location</label>
+                                    <select value={startupLocation} onChange={e => setStartupLocation(e.target.value)} className="flex-1 p-1 bg-transparent border rounded-md dark:border-gray-600">
+                                        {Object.keys((PRICING_DATA.antiHeeling?.startupLocations as any) || {}).map(k => (
+                                            <option key={k} value={k}>{k}</option>
+                                        ))}
+                                    </select>
+                                    <div className="ml-auto font-semibold">{fmtInt(startupCost)}</div>
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Average total (3 days incl. travel etc.).</div>
+                            </div>
+                        )}
                          <div className="flex items-center">
                             <span className="w-24">Currency: USD</span>
                             <span className="w-16">Rate:</span>
