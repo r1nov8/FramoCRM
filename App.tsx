@@ -1,8 +1,3 @@
-    const handleUpdateProjectPriceAndCloseModal = (price: number, currency: Currency) => {
-        handleUpdateProjectPrice(selectedProjectId!, price, currency);
-        setIsEstimateCalculatorOpen(false);
-    };
-
 import React, { useState, useMemo } from 'react';
 import { Header } from './components/Header';
 import { ExitDoorIcon, UsersIcon, BellIcon } from './components/icons';
@@ -54,6 +49,14 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
         reloadUnreadSummary,
         markProjectActivitiesRead,
     } = useData();
+    // Update project price from estimator and close the modal
+    const handleUpdateProjectPriceAndCloseModal = (price: number, currency: Currency) => {
+        if (selectedProjectId) {
+            handleUpdateProjectPrice(selectedProjectId, price, currency);
+        }
+        setIsEstimateCalculatorOpen(false);
+    };
+
 
     const [isAddProjectModalOpen, setIsAddProjectModalOpen] = useState(false);
     const [newProjectType, setNewProjectType] = useState<ProjectType>(ProjectType.FUEL_TRANSFER);

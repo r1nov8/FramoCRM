@@ -291,6 +291,15 @@ export const PRICING_DATA: GenericPriceData = {
             'China - Guangzhou/Dalian etc.': { dayRate: 11550, travel: 10120, average: 56000 },
             'Japan': { average: 56000 },
         },
+        // Shipping cost for standard system (3-colli, 1-2 ton) by commissioning country/region
+        shippingByCommissioningRegion: {
+            'Norway': 10000,
+            'Europe': 15000,
+            'Romania/Turkey/East Europe': 20000,
+            'Asia': 30000,
+            'USA': 30000,
+            'Canada': 30000,
+        },
     classCertification: {
             DNV: {
                 '<100kW': { pump: 2500, price2: 500, price3: 0, system: 0 },

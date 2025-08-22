@@ -3,7 +3,7 @@ import { Modal } from './Modal';
 import type { Project, Company, TeamMember } from '../types';
 import { Currency, ProjectType } from '../types';
 import { PRICING_DATA } from '../data/pricingData';
-import type { PriceEntry, Accessory, PumpPriceData, PumpVariant } from '../data/pricingData';
+import type { Accessory, PumpPriceData, PumpVariant } from '../data/pricingData';
 
 interface LineItem {
     id: string;
@@ -24,6 +24,7 @@ interface LineItem {
     isMeasurement?: boolean;
     isOtherEquipment?: boolean;
     isClassCert?: boolean;
+    isValveEH?: boolean;
     pumpType?: string;
     pumpVariant?: PumpVariant;
     pumpLength?: number;
@@ -31,15 +32,14 @@ interface LineItem {
     motorVariant?: 'NON EX-Proof' | 'EX-Proof';
     motorModel?: string;
     motorKw?: number;
-    starterType?: 'DOL' | 'SOFT';
-    starterRange?: string; // e.g., '20-60kW'
+    starterType?: 'DOL' | 'SOFT' | 'YD' | 'VFD';
+    starterRange?: string;
     valveActing?: 'Single-acting' | 'Double-acting';
-    valveModel?: string; // DN size + style key
+    valveModel?: string;
     levelSwitchModel?: string;
-    isValveEH?: boolean;
     classSociety?: string;
     classBracket?: string;
-    selectedOption?: string; // name of selected trunk/accessory
+    selectedOption?: string;
     qty: number;
     unitPrice: number;
 }
@@ -53,9 +53,9 @@ interface EstimateCalculatorModalProps {
 }
 
 const pumpVariantDescriptions: { [key: string]: string } = {
-    CS: "CS** = Cofferdam + Strip",
-    CST: "CST* = Cofferdam + Strip + Temp sensor",
-    CSTV: "CSTV = Cofferdam + Strip + Temp sensor + Vacuumdrain"
+    CS: 'CS** = Cofferdam + Strip',
+    CST: 'CST* = Cofferdam + Strip + Temp sensor',
+    CSTV: 'CSTV = Cofferdam + Strip + Temp sensor + Vacuumdrain',
 };
 
 const AH_PUMP_TYPES = ['RBP-250', 'RBP-300', 'RBP-400'] as const;
@@ -69,29 +69,29 @@ const getInitialLineItems = (isAntiHeeling: boolean): LineItem[] => {
     if (isAntiHeeling) {
         // Minimal Anti-Heeling initial setup; pricing to be provided later
         const initialQty = 2;
-    const defaultMotorVariant: 'NON EX-Proof' | 'EX-Proof' = 'NON EX-Proof';
-    const defaultMotorList = defaultMotorVariant === 'NON EX-Proof' ? AH_MOTORS_NON_EX : AH_MOTORS_EX_PROOF;
+        const defaultMotorVariant: 'NON EX-Proof' | 'EX-Proof' = 'NON EX-Proof';
+        const defaultMotorList = defaultMotorVariant === 'NON EX-Proof' ? AH_MOTORS_NON_EX : AH_MOTORS_EX_PROOF;
         const defaultMotor = defaultMotorList[7] || defaultMotorList[0]; // prefer ~37kW if present
         const starterKeys = Object.keys((PRICING_DATA.antiHeeling?.starters?.DOL as Record<string, number>) || {});
         const defaultStarterRange = (starterKeys[1] || starterKeys[0] || '0-20kW');
         const defaultStarterType: 'DOL' | 'SOFT' = 'DOL';
         const starterPrice = (PRICING_DATA.antiHeeling?.starters?.[defaultStarterType] as Record<string, number> | undefined)?.[defaultStarterRange] || 0;
 
-    const valveSingleKeys = Object.keys((PRICING_DATA.antiHeeling?.valvesPneumatic?.singleActing as Record<string, number>) || {});
-    const defaultValveModel = valveSingleKeys[0] || '';
-    const defaultValvePrice = (PRICING_DATA.antiHeeling?.valvesPneumatic?.singleActing as Record<string, number> | undefined)?.[defaultValveModel] || 0;
-    const valveDoubleKeys = Object.keys((PRICING_DATA.antiHeeling?.valvesPneumatic?.doubleActing as Record<string, number>) || {});
-    const defaultValveModelDouble = valveDoubleKeys[0] || '';
-    const defaultValvePriceDouble = (PRICING_DATA.antiHeeling?.valvesPneumatic?.doubleActing as Record<string, number> | undefined)?.[defaultValveModelDouble] || 0;
-    const levelSwitchKeys = Object.keys((PRICING_DATA.antiHeeling?.levelSwitches as Record<string, number>) || {});
+        const valveSingleKeys = Object.keys((PRICING_DATA.antiHeeling?.valvesPneumatic?.singleActing as Record<string, number>) || {});
+        const defaultValveModel = valveSingleKeys[0] || '';
+        const defaultValvePrice = (PRICING_DATA.antiHeeling?.valvesPneumatic?.singleActing as Record<string, number> | undefined)?.[defaultValveModel] || 0;
+        const valveDoubleKeys = Object.keys((PRICING_DATA.antiHeeling?.valvesPneumatic?.doubleActing as Record<string, number>) || {});
+        const defaultValveModelDouble = valveDoubleKeys[0] || '';
+        const defaultValvePriceDouble = (PRICING_DATA.antiHeeling?.valvesPneumatic?.doubleActing as Record<string, number> | undefined)?.[defaultValveModelDouble] || 0;
+        const levelSwitchKeys = Object.keys((PRICING_DATA.antiHeeling?.levelSwitches as Record<string, number>) || {});
         const defaultLevelSwitch = levelSwitchKeys[0] || '';
         const defaultLevelSwitchPrice = (PRICING_DATA.antiHeeling?.levelSwitches as Record<string, number> | undefined)?.[defaultLevelSwitch] || 0;
-    const valveEHSingleKeys = Object.keys((PRICING_DATA.antiHeeling?.valvesElectricPure?.singleActing as Record<string, number>) || {}).filter(k => !k.startsWith('DN200'));
-    const valveEHDoubleKeys = Object.keys((PRICING_DATA.antiHeeling?.valvesElectricPure?.doubleActing as Record<string, number>) || {}).filter(k => !k.startsWith('DN200'));
-    const defaultValveEH = valveEHSingleKeys[0] || '';
-    const defaultValveEHPrice = (PRICING_DATA.antiHeeling?.valvesElectricPure?.singleActing as Record<string, number> | undefined)?.[defaultValveEH] || 0;
-    const defaultValveEHDouble = valveEHDoubleKeys[0] || '';
-    const defaultValveEHDoublePrice = (PRICING_DATA.antiHeeling?.valvesElectricPure?.doubleActing as Record<string, number> | undefined)?.[defaultValveEHDouble] || 0;
+        const valveEHSingleKeys = Object.keys((PRICING_DATA.antiHeeling?.valvesElectricPure?.singleActing as Record<string, number>) || {}).filter(k => !k.startsWith('DN200'));
+        const valveEHDoubleKeys = Object.keys((PRICING_DATA.antiHeeling?.valvesElectricPure?.doubleActing as Record<string, number>) || {}).filter(k => !k.startsWith('DN200'));
+        const defaultValveEH = valveEHSingleKeys[0] || '';
+        const defaultValveEHPrice = (PRICING_DATA.antiHeeling?.valvesElectricPure?.singleActing as Record<string, number> | undefined)?.[defaultValveEH] || 0;
+        const defaultValveEHDouble = valveEHDoubleKeys[0] || '';
+        const defaultValveEHDoublePrice = (PRICING_DATA.antiHeeling?.valvesElectricPure?.doubleActing as Record<string, number> | undefined)?.[defaultValveEHDouble] || 0;
         // class certification default
         const classSoc = 'DNV';
         const classBr = '<100kW';
@@ -139,34 +139,23 @@ const getInitialLineItems = (isAntiHeeling: boolean): LineItem[] => {
         { id: '3', description: 'Optional Accessories', sub: 'Well Suction', isAccessory: true, selectedOption: 'None', qty: initialQty, unitPrice: 0 },
         { id: '4', description: 'Additional Equipment', sub: 'Dummies SD100', qty: 0.2, unitPrice: 11000 },
         { id: '5', description: '', sub: 'Surcharge for extra split pipe per pump (S2000 per pump; NOK 11*1.04*1,4/8,0)', qty: 1, unitPrice: 11000 },
-        { id: '6', description: 'Portable Equipment', qty: 0, unitPrice: 0 },
-        { id: '7', description: 'Ballast pumps', qty: 0, unitPrice: 0 },
-        { id: '8', description: 'Tank cleaning pump', qty: 0, unitPrice: 0 },
-        { id: '9', description: 'Bow thruster motor', qty: 0, unitPrice: 0 },
-        { id: '10', description: 'Hydraulic module', sub: '2 x A10FZO28 / 2x25kW', qty: 1, unitPrice: 380000 },
-        { id: '11', description: 'Misc. Parts', qty: 1, unitPrice: 30000 },
-        { id: '12', description: 'Control panel pumps', sub: '2 pumps', qty: 1, unitPrice: 0 },
-        { id: '13', description: 'Control panel hydr. syst.', sub: '2 aggregate', qty: 1, unitPrice: 34000 },
-        { id: '14', description: 'Heat Exchangers', qty: 0, unitPrice: 0 },
-        { id: '15', description: 'Hydraulic piping', sub: 'Type: Type, Mal: Mal', qty: 1, unitPrice: 199200 },
-        { id: '16', description: 'Additional Equipment', sub: 'Suction well 18mm', qty: 1, unitPrice: 19000 },
-        { id: '17', description: '', sub: 'Jockey pump', qty: 1, unitPrice: 20000 },
-        { id: '18', description: 'El.starters, main', sub: '2xVFD (note also 3x VFD starter cabinets)', qty: 2, unitPrice: 10000 },
     ];
 };
 
-
 export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = ({ onClose, project, companies, teamMembers, onUpdateProjectPrice }) => {
     const isAH = project.projectType === ProjectType.ANTI_HEELING;
-    
+
     const [lineItems, setLineItems] = useState<LineItem[]>(getInitialLineItems(!!isAH));
     const [showExtras, setShowExtras] = useState(false);
-    const [usdRate, setUsdRate] = useState(8.70);
-    const [eurRate, setEurRate] = useState(11.70);
-    const [surchargePercent, setSurchargePercent] = useState(15);
-    const [provisionPercent, setProvisionPercent] = useState(4.0);
+    const [usdRate, setUsdRate] = useState(8.7);
+    const [eurRate, setEurRate] = useState(11.7);
+    const [adminPercent, setAdminPercent] = useState(10);
     const [agentCommissionPercent, setAgentCommissionPercent] = useState(4.0);
     const [profitMarginPercent, setProfitMarginPercent] = useState(50.0);
+    const [bottomPercent, setBottomPercent] = useState(20.0);
+    const [targetPriceNOK, setTargetPriceNOK] = useState<number | null>(null);
+    const [extraCommissioningDays, setExtraCommissioningDays] = useState<number>(0);
+    const EXTRA_DAY_RATE = 12000;
     const [startupLocation, setStartupLocation] = useState<string>(() => Object.keys((PRICING_DATA.antiHeeling?.startupLocations as any) || {})[0] || '');
     const startupAverage = useMemo(() => {
         const row = ((PRICING_DATA.antiHeeling?.startupLocations as any) || {})[startupLocation] || {};
@@ -203,18 +192,18 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     const shipyard = useMemo(() => companies.find(c => c.id === project.shipyardId), [companies, project.shipyardId]);
     const vesselOwner = useMemo(() => project.vesselOwnerId ? companies.find(c => c.id === project.vesselOwnerId) : undefined, [companies, project.vesselOwnerId]);
     const salesRep = useMemo(() => project.salesRepId ? teamMembers.find(m => m.id === project.salesRepId) : undefined, [teamMembers, project.salesRepId]);
-    
+
     const handleItemChange = (id: string, field: 'qty' | 'unitPrice', value: number) => {
         setLineItems(prev => {
             let updatedItems = prev.map(item => item.id === id ? { ...item, [field]: value } : item);
 
             const changedItem = updatedItems.find(item => item.id === id);
-        if (changedItem?.isPump && field === 'qty') {
+            if (changedItem?.isPump && field === 'qty') {
                 updatedItems = updatedItems.map(item => {
                     if (item.isMotor || item.isStarter || item.isValve || item.isValveEH) {
                         return { ...item, qty: value };
                     }
-            if (item.isPumpAddition && item.id === '1pa' && (item.qty || 0) > 0) {
+                    if (item.isPumpAddition && item.id === '1pa' && (item.qty || 0) > 0) {
                         return { ...item, qty: value };
                     }
                     return item;
@@ -442,7 +431,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
             ehItem.unitPrice = refTable[currentModel] || 0;
             newItems[idx] = ehItem;
             return newItems;
-    });
+        });
     };
 
     const handleLevelSwitchChange = (model: string) => {
@@ -465,11 +454,30 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
             const idx = items.findIndex(i => i.isClassCert);
             if (idx === -1) return prevItems;
             const it = { ...items[idx] };
-            if (field === 'society') it.classSociety = value;
-            if (field === 'bracket') it.classBracket = value;
-            const soc = it.classSociety || 'DNV';
-            const br = it.classBracket || '<100kW';
-            const part = ((((PRICING_DATA.antiHeeling?.classCertification || {}) as any)[soc] || {})[br]) || { pump: 0, price2: 0, price3: 0, system: 0 };
+
+            // Update requested field
+            if (field === 'society') {
+                it.classSociety = value;
+                // When society changes, ensure bracket is valid for that society
+                const socTable = ((PRICING_DATA.antiHeeling?.classCertification as any) || {})[value] || {};
+                const brs = Object.keys(socTable);
+                if (!brs.includes(it.classBracket || '')) {
+                    it.classBracket = brs[0] || '';
+                }
+            }
+            if (field === 'bracket') {
+                it.classBracket = value;
+            }
+
+            // Resolve with safe defaults from data when missing
+            const socAll = (PRICING_DATA.antiHeeling?.classCertification as any) || {};
+            const soc = it.classSociety && socAll[it.classSociety] ? it.classSociety : Object.keys(socAll)[0];
+            const socTable = (socAll[soc] as any) || {};
+            const br = it.classBracket && socTable[it.classBracket] !== undefined ? it.classBracket : Object.keys(socTable)[0];
+
+            const part = (socTable[br] as any) || { pump: 0, price2: 0, price3: 0, system: 0 };
+            it.classSociety = soc;
+            it.classBracket = br;
             it.unitPrice = (part.pump || 0) + (part.price2 || 0) + (part.price3 || 0) + (part.system || 0);
             items[idx] = it;
             return items;
@@ -481,30 +489,57 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
         return lineItems.reduce((acc, item) => acc + (item.qty * (item.unitPrice || 0)), 0);
     }, [lineItems]);
     
-    const surchargeAmount = useMemo(() => {
-        return equipmentCost * (surchargePercent / 100);
-    }, [equipmentCost, surchargePercent]);
+    const [shippingRegion, setShippingRegion] = useState<string>(() => Object.keys((PRICING_DATA.antiHeeling?.shippingByCommissioningRegion as any) || {})[0] || 'Norway');
+    const [shippingAutoMap, setShippingAutoMap] = useState<boolean>(true);
+    const shippingCost = useMemo(() => {
+        const table = (PRICING_DATA.antiHeeling?.shippingByCommissioningRegion as Record<string, number>) || {};
+        const key = shippingRegion && table[shippingRegion] !== undefined ? shippingRegion : Object.keys(table)[0];
+        return (key ? table[key] : 0) || 0;
+    }, [shippingRegion]);
 
-    const serviceCost = 244000;
-    const shippingCost = 120000;
+    // Map Startup location to a shipping region (simple keyword mapping)
+    const mapStartupToRegion = (loc: string): string => {
+        const l = (loc || '').toLowerCase();
+        if (l.includes('norway') || l.includes('vard') || l.includes('ulstein')) return 'Norway';
+        if (l.includes('romania') || l.includes('turkey') || l.includes('tyrk') || l.includes('balkan') || l.includes('east')) return 'Romania/Turkey/East Europe';
+        if (
+            l.includes('korea') || l.includes('china') || l.includes('shanghai') || l.includes('guangzhou') || l.includes('dalian') || l.includes('japan') || l.includes('philippines') || l.includes('subic') || l.includes('shi') || l.includes('dsme') || l.includes('hhi') || l.includes('hmd') || l.includes('singapore')
+        ) return 'Asia';
+        if (l.includes('usa') || l.includes('houston')) return 'USA';
+        if (l.includes('canada')) return 'Canada';
+        // Default bucket: Europe
+        return 'Europe';
+    };
+
+    useEffect(() => {
+        if (!isAH) return;
+        if (!shippingAutoMap) return;
+        const next = mapStartupToRegion(startupLocation);
+        setShippingRegion(next);
+    }, [startupLocation, shippingAutoMap, isAH]);
     const startupCost = startupAverage || 0;
-    const escalationCost = 0;
+    const extraCommissioningCost = useMemo(() => {
+        const d = Number.isFinite(extraCommissioningDays) ? extraCommissioningDays : 0;
+        return Math.max(0, d) * EXTRA_DAY_RATE;
+    }, [extraCommissioningDays]);
+    const adminAmount = useMemo(() => {
+        return equipmentCost * (adminPercent / 100);
+    }, [equipmentCost, adminPercent]);
+    const vkxskp = useMemo(() => equipmentCost + adminAmount, [equipmentCost, adminAmount]);
 
-    const totalCostBeforeProvision = useMemo(() => {
-        return equipmentCost + surchargeAmount + serviceCost + shippingCost + escalationCost + startupCost;
-    }, [equipmentCost, surchargeAmount, startupCost]);
+    // Sub total = Selvkost (VKxSKP) + Startup + Shipping
+    const subTotal = useMemo(() => {
+        return vkxskp + startupCost + shippingCost;
+    }, [vkxskp, startupCost, shippingCost]);
     
-    const provisionAmount = useMemo(() => {
-        return totalCostBeforeProvision * (provisionPercent / 100);
-    }, [totalCostBeforeProvision, provisionPercent]);
-
     const agentCommissionAmount = useMemo(() => {
-        return totalCostBeforeProvision * (agentCommissionPercent / 100);
-    }, [totalCostBeforeProvision, agentCommissionPercent]);
+        return subTotal * (agentCommissionPercent / 100);
+    }, [subTotal, agentCommissionPercent]);
 
+    // Final selvkost includes agent commission and extra commissioning cost
     const totalSelfCost = useMemo(() => {
-        return totalCostBeforeProvision + provisionAmount + agentCommissionAmount;
-    }, [totalCostBeforeProvision, provisionAmount, agentCommissionAmount]);
+        return subTotal + agentCommissionAmount + extraCommissioningCost;
+    }, [subTotal, agentCommissionAmount, extraCommissioningCost]);
 
     const profitAmount = useMemo(() => {
          return totalSelfCost * (profitMarginPercent / 100);
@@ -521,6 +556,16 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     const salesPriceEUR = useMemo(() => {
         return salesPriceNOK / eurRate;
     }, [salesPriceNOK, eurRate]);
+    const bottomAmount = useMemo(() => totalSelfCost * (bottomPercent / 100), [totalSelfCost, bottomPercent]);
+    const bottomPriceNOK = useMemo(() => totalSelfCost + bottomAmount, [totalSelfCost, bottomAmount]);
+    const targetPriceUSD = useMemo(() => (targetPriceNOK || 0) / usdRate, [targetPriceNOK, usdRate]);
+    const targetPriceEUR = useMemo(() => (targetPriceNOK || 0) / eurRate, [targetPriceNOK, eurRate]);
+
+    useEffect(() => {
+        if (targetPriceNOK === null) {
+            setTargetPriceNOK(Math.ceil(salesPriceNOK));
+        }
+    }, [salesPriceNOK, targetPriceNOK]);
     
     const pumpItem = lineItems.find(item => item.isPump);
     const trunkItem = lineItems.find(item => item.isTrunk);
@@ -848,8 +893,8 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                                 <td className="p-2 text-right">
                                                     <input type="number" value={item.qty} onChange={e => handleItemChange(item.id, 'qty', parseFloat(e.target.value))} className="w-20 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
                                                 </td>
-                                                <td className="p-2 text-right font-medium">{(item.unitPrice || 0).toLocaleString('en-US')}</td>
-                                                <td className="p-2 text-right font-medium">{(item.qty * (item.unitPrice || 0)).toLocaleString('en-US')}</td>
+                                                <td className="p-2 text-right font-medium">{fmtInt(item.unitPrice || 0)}</td>
+                                                <td className="p-2 text-right font-medium">{fmtInt(item.qty * (item.unitPrice || 0))}</td>
                                             </tr>
                                             {isAH && (
                                                 <tr className="bg-gray-50 dark:bg-gray-800/40">
@@ -1028,8 +1073,8 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                                                                     <div className="col-span-2 text-right">
                                                                                         <input type="number" value={i.qty} onChange={e => handleItemChange(i.id, 'qty', parseFloat(e.target.value))} className="w-20 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
                                                                                     </div>
-                                                                                    <div className="col-span-2 text-right">{(i.unitPrice || 0).toLocaleString('en-US')}</div>
-                                                                                    <div className="col-span-2 text-right font-medium">{(i.qty * (i.unitPrice || 0)).toLocaleString('en-US')}</div>
+                                                                                    <div className="col-span-2 text-right">{fmtInt(i.unitPrice || 0)}</div>
+                                                                                    <div className="col-span-2 text-right font-medium">{fmtInt(i.qty * (i.unitPrice || 0))}</div>
                                                                                 </div>
                                                                             ))}
                                                                         </div>
@@ -1131,8 +1176,8 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                             <td className="p-2 text-right">
                                                 <input type="number" value={item.qty} onChange={e => handleItemChange(item.id, 'qty', parseFloat(e.target.value))} className="w-20 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
                                             </td>
-                                            <td className="p-2 text-right font-medium">{(item.unitPrice || 0).toLocaleString('en-US')}</td>
-                                            <td className="p-2 text-right font-medium">{(item.qty * (item.unitPrice || 0)).toLocaleString('en-US')}</td>
+                                            <td className="p-2 text-right font-medium">{fmtInt(item.unitPrice || 0)}</td>
+                                            <td className="p-2 text-right font-medium">{fmtInt(item.qty * (item.unitPrice || 0))}</td>
                                         </tr>
                                     );
                                 } else if (item.isTrunk || item.isAccessory) {
@@ -1148,7 +1193,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                         <td className="p-2 text-right">
                                             <input type="number" value={item.unitPrice} onChange={e => handleItemChange(item.id, 'unitPrice', parseFloat(e.target.value))} className="w-28 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
                                         </td>
-                                        <td className="p-2 text-right font-medium">{(item.qty * item.unitPrice).toLocaleString('en-US')}</td>
+                                        <td className="p-2 text-right font-medium">{fmtInt(item.qty * item.unitPrice)}</td>
                                     </tr>
                                 );
                             })}
@@ -1157,65 +1202,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                 </div>
 
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                            <span>Equipment Cost</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(equipmentCost)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Surcharge (excl. pipes)</span>
-                            <div className="flex items-center">
-                                <input type="number" value={surchargePercent} onChange={e => setSurchargePercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
-                                <span className="font-semibold text-right w-32">{fmtInt(surchargeAmount)}</span>
-                            </div>
-                        </div>
-                         <div className="flex justify-between items-center">
-                            <span>Service/Startup</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(serviceCost)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Shipping Costs</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(shippingCost)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Escalation</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(escalationCost)}</span>
-                        </div>
-                        <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700">
-                            <span className="italic">Sub-total</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(totalCostBeforeProvision)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Agent Commission</span>
-                            <div className="flex items-center">
-                                <input type="number" value={agentCommissionPercent} onChange={e => setAgentCommissionPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
-                                <span className="font-semibold text-right w-32">{fmtInt(agentCommissionAmount)}</span>
-                            </div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Standard Provision</span>
-                             <div className="flex items-center">
-                                <input type="number" value={provisionPercent} onChange={e => setProvisionPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
-                                <span className="font-semibold text-right w-32">{fmtInt(provisionAmount)}</span>
-                            </div>
-                        </div>
-                        <div className="flex justify-between items-center font-bold pt-2 border-t-2 dark:border-gray-600">
-                            <span>Total Self-Cost</span>
-                            <span className="text-right w-32">{fmtInt(totalSelfCost)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Profit Margin</span>
-                            <div className="flex items-center">
-                                <input type="number" value={profitMarginPercent} onChange={e => setProfitMarginPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
-                                <span className="font-semibold text-right w-32">{fmtInt(profitAmount)}</span>
-                            </div>
-                        </div>
-                         <div className="flex justify-between items-center font-bold text-xl p-2 bg-blue-100 dark:bg-blue-900/50 rounded-md">
-                            <span>Sales Price</span>
-                            <span className="text-right">{fmtCurrency(salesPriceNOK, 'nb-NO', 'NOK')}</span>
-                        </div>
-                    </div>
-                    
+                    {/* Left column: Class/Startup/Currencies */}
                     <div className="space-y-2 self-end">
                         {isAH && (() => {
                             const classItem = lineItems.find(i => i.isClassCert);
@@ -1266,29 +1253,168 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Average total (3 days incl. travel etc.).</div>
                             </div>
                         )}
-                         <div className="flex items-center">
-                            <span className="w-24">Currency: USD</span>
-                            <span className="w-16">Rate:</span>
-                            <input type="number" step="0.01" value={usdRate} onChange={e => setUsdRate(parseFloat(e.target.value))} className="w-24 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
-                            <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-800 rounded-md">
-                                {fmtCurrency(salesPriceUSD, 'en-US', 'USD')}
+                        {isAH && (
+                            <div className="p-2 mb-2 bg-green-50/60 dark:bg-green-900/20 rounded-md">
+                                <div className="font-semibold mb-1">Extra Commissioning Days beyond 3</div>
+                                <div className="flex items-center gap-2">
+                                    <label className="text-xs text-gray-500 dark:text-gray-400">Days</label>
+                                    <input type="number" min={0} step={1} value={extraCommissioningDays} onChange={e => setExtraCommissioningDays(parseInt(e.target.value || '0', 10))} className="w-24 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">@ {fmtInt(EXTRA_DAY_RATE)} / day</span>
+                                    <div className="ml-auto font-semibold">{fmtInt(extraCommissioningCost)}</div>
+                                </div>
                             </div>
-                            <button onClick={() => onUpdateProjectPrice(salesPriceUSD, Currency.USD)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
-                        </div>
-                         <div className="flex items-center">
-                            <span className="w-24">Currency: EUR</span>
-                            <span className="w-16">Rate:</span>
-                            <input type="number" step="0.01" value={eurRate} onChange={e => setEurRate(parseFloat(e.target.value))} className="w-24 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
-                            <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-800 rounded-md">
-                               {fmtCurrency(salesPriceEUR, 'de-DE', 'EUR')}
-                            </div>
-                             <button onClick={() => onUpdateProjectPrice(salesPriceEUR, Currency.EUR)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
-                        </div>
+                        )}
+                        {/* Currency blocks moved to the right column after Sales Price */}
                         <div className="p-2 mt-4 bg-yellow-100 dark:bg-yellow-900/50 rounded-md">
                             <p className="font-semibold">Comments:</p>
                             <p>Kirk says WMMP is approx. USD 100,000 incl. stainless pipe / hydraulics.</p>
                             <p>Yard states that the Framo price is RMB 2,255,000 (approx. USD 315K with a rate of 0.140).</p>
                             <p className="mt-2 text-xs italic">Note from PDF: Cost Price Plate: €5.50, Cost Price Pipe: €7.00</p>
+                        </div>
+                    </div>
+                    {/* Right column: Sales Price/summary */}
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span>Verkskost (VK) SUM</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(equipmentCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Adm.tillegg (SKP)</span>
+                            <div className="flex items-center">
+                                <input type="number" value={adminPercent} onChange={e => setAdminPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
+                                <span className="font-semibold text-right w-32">{fmtInt(adminAmount)}</span>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Selvkost (VKxSKP)</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(vkxskp)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Startup (Commissioning)</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(startupCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Extra Commissioning Days</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(extraCommissioningCost)}</span>
+                        </div>
+                        {isAH && (
+                            <div className="p-2 mb-2 bg-blue-50 dark:bg-blue-900/30 rounded-md">
+                                <div className="font-semibold mb-1">Shipping (Commissioning Country)</div>
+                                <div className="flex items-center gap-2">
+                                    <label className="text-xs text-gray-500 dark:text-gray-400">Country/Region</label>
+                                    <select value={shippingRegion} onChange={e => { setShippingRegion(e.target.value); setShippingAutoMap(false); }} className="flex-1 p-1 bg-transparent border rounded-md dark:border-gray-600">
+                                        {Object.keys((PRICING_DATA.antiHeeling?.shippingByCommissioningRegion as any) || {}).map(k => (
+                                            <option key={k} value={k}>{k}</option>
+                                        ))}
+                                    </select>
+                                    <div className="ml-auto font-semibold">{fmtInt(shippingCost)}</div>
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Standard system, 3-colli, 1–2 tonn.</div>
+                            </div>
+                        )}
+                        {/* Sub total before agent provision */}
+                        <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700">
+                            <span className="italic">Sub total</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(subTotal)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Agent provision</span>
+                            <div className="flex items-center">
+                                <input type="number" value={agentCommissionPercent} onChange={e => setAgentCommissionPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
+                                <span className="font-semibold text-right w-32">{fmtInt(agentCommissionAmount)}</span>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center font-bold pt-2 border-t-2 dark:border-gray-600">
+                            <span>Final selvkost</span>
+                            <span className="text-right w-32">{fmtInt(totalSelfCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Salgspåslag/mark-up</span>
+                            <div className="flex items-center">
+                                <input type="number" value={profitMarginPercent} onChange={e => setProfitMarginPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
+                                <span className="font-semibold text-right w-32">{fmtInt(profitAmount)}</span>
+                            </div>
+                        </div>
+                         <div className="flex justify-between items-center font-bold text-xl p-2 bg-blue-100 dark:bg-blue-900/50 rounded-md">
+                            <span>Salgssum NOK</span>
+                            <span className="text-right">{fmtCurrency(salesPriceNOK, 'nb-NO', 'NOK')}</span>
+                        </div>
+                        {/* Dynamic currency block after Sales Price */}
+                        <div className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md">
+                            {(() => {
+                                const target = project.currency;
+                                const label = (t: string) => `Salgssum i ${t}`;
+                                if (target === Currency.USD) {
+                                    return (
+                                        <div className="flex items-center">
+                                            <span className="w-40">{label('USD')}</span>
+                                            <span className="w-16">Rate:</span>
+                                            <input type="number" step="0.01" value={usdRate} onChange={e => setUsdRate(parseFloat(e.target.value))} className="w-24 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
+                                            <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
+                                                {fmtCurrency(salesPriceUSD, 'en-US', 'USD')}
+                                            </div>
+                                            <button onClick={() => onUpdateProjectPrice(salesPriceUSD, Currency.USD)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
+                                        </div>
+                                    );
+                                } else if (target === Currency.EUR) {
+                                    return (
+                                        <div className="flex items-center">
+                                            <span className="w-40">{label('EUR')}</span>
+                                            <span className="w-16">Rate:</span>
+                                            <input type="number" step="0.01" value={eurRate} onChange={e => setEurRate(parseFloat(e.target.value))} className="w-24 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
+                                            <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
+                                               {fmtCurrency(salesPriceEUR, 'de-DE', 'EUR')}
+                                            </div>
+                                            <button onClick={() => onUpdateProjectPrice(salesPriceEUR, Currency.EUR)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
+                                        </div>
+                                    );
+                                }
+                                // Default NOK
+                                return (
+                                    <div className="flex items-center">
+                                        <span className="w-40">{label('NOK')}</span>
+                                        <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
+                                            {fmtCurrency(salesPriceNOK, 'nb-NO', 'NOK')}
+                                        </div>
+                                        <button onClick={() => onUpdateProjectPrice(salesPriceNOK, Currency.NOK)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                        {/* Target & Bottom price */}
+                        <div className="flex justify-between items-center mt-2">
+                            <span>Target price</span>
+                            <div className="flex items-center">
+                                <input type="number" value={targetPriceNOK ?? 0} onChange={e => setTargetPriceNOK(parseFloat(e.target.value))} className="w-32 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-2" />
+                                <span className="text-sm text-gray-600 dark:text-gray-300">{
+                                    project.currency === Currency.USD
+                                        ? fmtCurrency(targetPriceUSD, 'en-US', 'USD')
+                                        : project.currency === Currency.EUR
+                                            ? fmtCurrency(targetPriceEUR, 'de-DE', 'EUR')
+                                            : fmtCurrency(targetPriceNOK || 0, 'nb-NO', 'NOK')
+                                }</span>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Påslag bottom</span>
+                            <div className="flex items-center">
+                                <input type="number" value={bottomPercent} onChange={e => setBottomPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
+                                <span className="font-semibold text-right w-32">{fmtInt(bottomAmount)}</span>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center font-semibold">
+                            <span>Bottom price NOK</span>
+                            <span className="text-right w-32">{fmtCurrency(bottomPriceNOK, 'nb-NO', 'NOK')}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-300">
+                            <span>Bottom price i {project.currency}</span>
+                            <span className="text-right w-32">{
+                                project.currency === Currency.USD
+                                    ? fmtCurrency(bottomPriceNOK / usdRate, 'en-US', 'USD')
+                                    : project.currency === Currency.EUR
+                                        ? fmtCurrency(bottomPriceNOK / eurRate, 'de-DE', 'EUR')
+                                        : fmtCurrency(bottomPriceNOK, 'nb-NO', 'NOK')
+                            }</span>
                         </div>
                     </div>
                 </div>
