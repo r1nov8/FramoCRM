@@ -13,6 +13,8 @@ services:
         generateValue: true
       - key: FILES_ENABLED
         value: "false"
+      - key: ALLOW_ONRENDER
+        value: "true"
     autoDeploy: true
     healthCheckPath: /api/contacts
     envSpecific:
