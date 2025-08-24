@@ -1,0 +1,30 @@
+{
+  "folders": [
+    {
+      "name": "FramoCRM Frontend",
+      "path": "."
+    },
+    {
+      "name": "FramoCRM Backend", 
+      "path": "./backend"
+    }
+  ],
+  "settings": {
+    "typescript.preferences.quoteStyle": "single",
+    "github.copilot.enable": {
+      "*": true
+    },
+    "files.associations": {
+      "*.tsx": "typescriptreact",
+      "*.ts": "typescript"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "github.copilot",
+      "github.copilot-chat",
+      "ms-vscode.vscode-typescript-next",
+      "bradlc.vscode-tailwindcss"
+    ]
+  }
+}
