@@ -66,3 +66,4 @@ Verification
 
 - Backend health: `GET /api/contacts`
 - Migration check: `GET /api/diagnostics/project-type-counts`
+# Force rebuild Sun Aug 24 16:37:41 CEST 2025
