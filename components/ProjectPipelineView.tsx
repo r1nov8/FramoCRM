@@ -18,6 +18,7 @@ interface ProjectPipelineViewProps {
     onDeleteFile: (projectId: string, fileId: string) => void;
     onOpenHPUSizing: () => void;
     onOpenEstimateCalculator: () => void;
+    onOpenAIAssistant: () => void;
     isActive?: boolean;
     onOpenActivity: (projectId: string) => void;
 }
@@ -36,6 +37,7 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
     onDeleteFile,
     onOpenHPUSizing,
     onOpenEstimateCalculator,
+    onOpenAIAssistant,
     isActive = false,
     onOpenActivity,
 }) => {
@@ -68,6 +70,7 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
                         onDeleteFile={onDeleteFile}
                         onOpenHPUSizing={onOpenHPUSizing}
                         onOpenEstimateCalculator={onOpenEstimateCalculator}
+                        onOpenAIAssistant={onOpenAIAssistant}
                         isActive={isActive}
                         onOpenActivity={onOpenActivity}
                     />

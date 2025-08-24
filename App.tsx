@@ -13,6 +13,7 @@ import { AddContactModal } from './components/AddContactModal';
 import { ManageTeamModal } from './components/ManageTeamModal';
 import { HPUSizingModal } from './components/HPUSizingModal';
 import { EstimateCalculatorModal } from './components/EstimateCalculatorModal';
+import { AIAssistantModal } from './components/AIAssistantModal';
 import type { Project, Company, Contact, Currency, Activity } from './types';
 import { CompanyType, ProjectType } from './types';
 import { useData } from './context/DataContext';
@@ -67,6 +68,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
     const [isManageTeamModalOpen, setIsManageTeamModalOpen] = useState(false);
     const [isHPUSizingModalOpen, setIsHPUSizingModalOpen] = useState(false);
     const [isEstimateCalculatorOpen, setIsEstimateCalculatorOpen] = useState(false);
+    const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
     const [activeView, setActiveView] = useState<View>('dashboard');
     const [companyTypeForModal, setCompanyTypeForModal] = useState<CompanyType | null>(null);
     const [isActivityOpen, setIsActivityOpen] = useState(false);
@@ -260,6 +262,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                         onDeleteFile={handleDeleteFile}
                         onOpenHPUSizing={() => setIsHPUSizingModalOpen(true)}
                         onOpenEstimateCalculator={() => setIsEstimateCalculatorOpen(true)}
+                        onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
                         isActive={activeView === 'pipeline'}
                         onOpenActivity={(pid) => openActivityForProject(pid)}
                     />
@@ -325,6 +328,16 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                     teamMembers={teamMembers}
                     onUpdateProjectPrice={handleUpdateProjectPriceAndCloseModal}
                     onClose={() => setIsEstimateCalculatorOpen(false)}
+                />
+            )}
+            {isAIAssistantOpen && selectedProject && (
+                <AIAssistantModal
+                    isOpen={isAIAssistantOpen}
+                    onClose={() => setIsAIAssistantOpen(false)}
+                    project={selectedProject}
+                    companies={companies}
+                    contacts={contacts}
+                    teamMembers={teamMembers}
                 />
             )}
             {/* Global Activity slide-over to ensure visibility of the button in header */}

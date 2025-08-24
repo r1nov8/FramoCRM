@@ -21,7 +21,17 @@ type Message = {
     hasCopyButton?: boolean;
 };
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+type AssistantMode = 'ask' | 'agent';
+
+const getAI = () => {
+    // Use any to bypass TypeScript env checking for now
+    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+        console.warn('VITE_GEMINI_API_KEY not set - AI features will be limited');
+        return null;
+    }
+    return new GoogleGenAI({ apiKey });
+};
 
 const TypingIndicator = () => (
     <div className="flex items-center space-x-1 p-3">
@@ -44,15 +54,20 @@ const SimpleMarkdownRenderer: React.FC<{ text: string }> = ({ text }) => {
 export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onClose, project, companies, contacts, teamMembers }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [mode, setMode] = useState<AssistantMode>('ask');
+    const [inputText, setInputText] = useState('');
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (isOpen) {
+            const welcomeMessage = mode === 'ask' 
+                ? `Hi! I'm your AI assistant. How can I help with the "${project.name}" project today?`
+                : `Hi! I'm your AI assistant in agent mode. You can ask me anything about the "${project.name}" project or have a conversation about sales strategies, market insights, and more.`;
             setMessages([
-                { id: 'welcome', sender: 'ai', text: `Hi! I'm your AI assistant. How can I help with the "${project.name}" project today?` }
+                { id: 'welcome', sender: 'ai', text: welcomeMessage }
             ]);
         }
-    }, [isOpen, project.name]);
+    }, [isOpen, project.name, mode]);
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -89,7 +104,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
                 `;
             } else if (actionType === 'email' && primaryContact && primaryContactCompany && salesRep) {
                 prompt = `You are a helpful sales assistant for Framo, a marine equipment supplier.
-                Draft a professional follow-up email from '${salesRep.name}' to '${primaryContact.name}' of '${primaryContactCompany.name}'.
+                Draft a professional follow-up email from '${salesRep.first_name} ${salesRep.last_name}' to '${primaryContact.name}' of '${primaryContactCompany.name}'.
     
                 The purpose of the email is to follow up on the project '${project.name}'.
                 The current stage of the project is '${project.stage}'.
@@ -107,6 +122,13 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
             }
 
             if (prompt) {
+                const ai = getAI();
+                if (!ai) {
+                    setMessages(prev => [...prev, { id: `ai-err-${Date.now()}`, sender: 'ai', text: 'AI features are not available. Please configure VITE_GEMINI_API_KEY in your environment.', isHtml: false }]);
+                    setIsLoading(false);
+                    return;
+                }
+                
                 const response = await ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: prompt,
@@ -122,6 +144,68 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
             setMessages(prev => [...prev, { id: `ai-err-${Date.now()}`, sender: 'ai', text: 'Sorry, I encountered an error. Please try again.', isHtml: false }]);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleSendMessage = async () => {
+        if (!inputText.trim() || isLoading) return;
+
+        const userMessage: Message = { id: `user-${Date.now()}`, sender: 'user', text: inputText };
+        setMessages(prev => [...prev, userMessage]);
+        setInputText('');
+        setIsLoading(true);
+
+        try {
+            const ai = getAI();
+            if (!ai) {
+                setMessages(prev => [...prev, { id: `ai-err-${Date.now()}`, sender: 'ai', text: 'AI features are not available. Please configure VITE_GEMINI_API_KEY in your environment.', isHtml: false }]);
+                setIsLoading(false);
+                return;
+            }
+
+            // Build context about the project for agent mode
+            const shipyard = companies.find(c => c.id === project.shipyardId);
+            const vesselOwner = project.vesselOwnerId ? companies.find(c => c.id === project.vesselOwnerId) : undefined;
+            const primaryContact = project.primaryContactId ? contacts.find(c => c.id === project.primaryContactId) : undefined;
+            const primaryContactCompany = primaryContact ? companies.find(c => c.id === primaryContact.companyId) : undefined;
+            const salesRep = project.salesRepId ? teamMembers.find(tm => tm.id === project.salesRepId) : undefined;
+
+            const contextPrompt = `You are a helpful AI assistant for Framo, a marine equipment supplier. You are helping with the project "${project.name}".
+
+Project Context:
+- Name: ${project.name}
+- Stage: ${project.stage}
+- Value: ${project.currency} ${project.value.toLocaleString()}
+- Closing Date: ${new Date(project.closingDate).toLocaleDateString()}
+- Shipyard: ${shipyard?.name || 'N/A'}
+- Vessel Owner: ${vesselOwner?.name || 'N/A'}
+- Primary Contact: ${primaryContact?.name || 'N/A'} from ${primaryContactCompany?.name || 'N/A'}
+- Sales Rep: ${salesRep ? `${salesRep.first_name} ${salesRep.last_name}` : 'N/A'}
+- Notes: ${project.notes || 'No notes available'}
+
+User's question: ${inputText}
+
+Please provide a helpful response. Use markdown formatting for clarity when appropriate.`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: contextPrompt,
+            });
+            
+            const aiResponseText = response.text;
+            setMessages(prev => [...prev, { id: `ai-${Date.now()}`, sender: 'ai', text: aiResponseText, isHtml: true }]);
+        } catch (error) {
+            console.error("Gemini API error:", error);
+            setMessages(prev => [...prev, { id: `ai-err-${Date.now()}`, sender: 'ai', text: 'Sorry, I encountered an error. Please try again.', isHtml: false }]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleKeyPress = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSendMessage();
         }
     };
 
@@ -163,7 +247,34 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
                     <div ref={chatEndRef} />
                 </div>
                 <div className="p-4 border-t dark:border-gray-700">
-                    {!isLoading && (
+                    {/* Mode Selector */}
+                    <div className="mb-4">
+                        <div className="flex items-center justify-center gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                            <button
+                                onClick={() => setMode('ask')}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                                    mode === 'ask'
+                                        ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                                }`}
+                            >
+                                Ask Mode
+                            </button>
+                            <button
+                                onClick={() => setMode('agent')}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                                    mode === 'agent'
+                                        ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400 shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                                }`}
+                            >
+                                Agent Mode
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Conditional UI based on mode */}
+                    {mode === 'ask' && !isLoading && (
                         <div className="flex flex-wrap justify-center gap-3">
                            <button onClick={() => handleAction('summarize', 'Summarize this project')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800">
                                 <FileIcon className="w-4 h-4" />
@@ -176,6 +287,30 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
                              <button onClick={() => handleAction('insights', `Get market insights for ${project.fuelType}`)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 dark:bg-purple-900 dark:text-purple-300 dark:hover:bg-purple-800">
                                 <NewspaperIcon className="w-4 h-4" />
                                 Market Insights
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Agent Mode Input */}
+                    {mode === 'agent' && (
+                        <div className="flex gap-2">
+                            <textarea
+                                value={inputText}
+                                onChange={(e) => setInputText(e.target.value)}
+                                onKeyPress={handleKeyPress}
+                                placeholder="Ask me anything about this project..."
+                                className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+                                rows={2}
+                                disabled={isLoading}
+                            />
+                            <button
+                                onClick={handleSendMessage}
+                                disabled={!inputText.trim() || isLoading}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
                             </button>
                         </div>
                     )}

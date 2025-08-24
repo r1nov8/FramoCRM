@@ -6,7 +6,7 @@ import { ProjectStage, Currency } from '../types';
 import { CompanyCard } from './CompanyCard';
 import { ContactCard } from './ContactCard';
 import { ProductInfo } from './ProductInfo';
-import { PencilIcon, DollarIcon, PercentIcon, UploadIcon, DownloadIcon, TrashIcon, FileIcon, FileDocIcon, FilePdfIcon, CalculatorIcon, WrenchScrewdriverIcon } from './icons';
+import { PencilIcon, DollarIcon, PercentIcon, UploadIcon, DownloadIcon, TrashIcon, FileIcon, FileDocIcon, FilePdfIcon, CalculatorIcon, WrenchScrewdriverIcon, SparklesIcon } from './icons';
 import { useData } from '../context/DataContext';
 
 interface ProjectDetailsProps {
@@ -19,6 +19,7 @@ interface ProjectDetailsProps {
     onDeleteFile: (projectId: string, fileId: string) => void;
     onOpenHPUSizing: () => void;
     onOpenEstimateCalculator: () => void;
+    onOpenAIAssistant: () => void;
     isActive?: boolean;
     onOpenActivity: (projectId: string) => void;
 }
@@ -62,7 +63,7 @@ const stageProgress: { [key in ProjectStage]: number } = {
 
 const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectStage.QUOTE, ProjectStage.PO, ProjectStage.ORDER_CONFIRMATION, ProjectStage.WON];
 
-export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator, isActive = false, onOpenActivity }) => {
+export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator, onOpenAIAssistant, isActive = false, onOpenActivity }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity } = useData();
     const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -242,6 +243,18 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                     <button 
                                         onClick={onOpenHPUSizing}
                                         className="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
+                                    >
+                                        Open
+                                    </button>
+                                </div>
+                                <div className="flex-1 min-w-[200px] p-4 border dark:border-gray-700 rounded-lg flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">
+                                    <div>
+                                        <h3 className="font-semibold flex items-center"><SparklesIcon className="w-5 h-5 mr-2 text-gray-500" /> AI Assistant</h3>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Get AI-powered insights and assistance.</p>
+                                    </div>
+                                    <button 
+                                        onClick={onOpenAIAssistant}
+                                        className="px-3 py-1.5 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 dark:focus:ring-offset-gray-800"
                                     >
                                         Open
                                     </button>

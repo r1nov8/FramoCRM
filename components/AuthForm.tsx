@@ -16,7 +16,24 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    
     try {
+      // Check if mock mode is enabled
+      const mockMode = String((import.meta as any).env?.VITE_MOCK_MODE ?? '').toLowerCase().trim();
+      const isMockMode = mockMode === '1' || mockMode === 'true' || mockMode === 'yes';
+      
+      if (isMockMode) {
+        // Mock authentication - just return success with fake user
+        setTimeout(() => {
+          onAuthSuccess('mock-token', { 
+            name: username || 'Mock User', 
+            initials: (username || 'MU').slice(0, 2).toUpperCase() 
+          });
+          setLoading(false);
+        }, 500); // Simulate network delay
+        return;
+      }
+      
       const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
       if (mode === 'register') {
         // Create the user first
