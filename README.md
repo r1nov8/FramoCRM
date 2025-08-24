@@ -8,6 +8,17 @@ This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/drive/1LU0H7WJrzGpVFUX0ljk_jv_NbKPYL9cE
 
+## VS Code Copilot Agent Mode
+
+This project includes a Model Context Protocol (MCP) server that enables enhanced GitHub Copilot integration in VS Code. The MCP server provides Copilot with context about your database schema and allows it to help with database-related queries and code.
+
+**Quick Setup:**
+1. Open the project in VS Code
+2. Install the recommended extensions (GitHub Copilot, GitHub Copilot Chat)
+3. The MCP server will automatically connect when VS Code loads
+
+For detailed setup instructions, see [VS Code Copilot Setup Guide](docs/VS_CODE_COPILOT_SETUP.md).
+
 ## Run Locally
 
 **Prerequisites:**  Node.js

@@ -1,0 +1,37 @@
+{
+  "folders": [
+    {
+      "name": "FramoCRM (Root)",
+      "path": "."
+    },
+    {
+      "name": "Backend",
+      "path": "./backend"
+    },
+    {
+      "name": "MCP Server",
+      "path": "./mcp"
+    }
+  ],
+  "settings": {
+    "typescript.preferences.preferTypeOnlyAutoImports": true,
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "github.copilot.enable": {
+      "*": true,
+      "plaintext": false,
+      "markdown": true,
+      "typescript": true,
+      "javascript": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "github.copilot",
+      "github.copilot-chat",
+      "ms-vscode.vscode-typescript-next",
+      "esbenp.prettier-vscode",
+      "bradlc.vscode-tailwindcss"
+    ]
+  }
+}
