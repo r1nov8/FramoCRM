@@ -21,7 +21,15 @@ type Message = {
     hasCopyButton?: boolean;
 };
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAI = () => {
+    // Use any to bypass TypeScript env checking for now
+    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+        console.warn('VITE_GEMINI_API_KEY not set - AI features will be limited');
+        return null;
+    }
+    return new GoogleGenAI({ apiKey });
+};
 
 const TypingIndicator = () => (
     <div className="flex items-center space-x-1 p-3">
@@ -89,7 +97,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
                 `;
             } else if (actionType === 'email' && primaryContact && primaryContactCompany && salesRep) {
                 prompt = `You are a helpful sales assistant for Framo, a marine equipment supplier.
-                Draft a professional follow-up email from '${salesRep.name}' to '${primaryContact.name}' of '${primaryContactCompany.name}'.
+                Draft a professional follow-up email from '${salesRep.first_name} ${salesRep.last_name}' to '${primaryContact.name}' of '${primaryContactCompany.name}'.
     
                 The purpose of the email is to follow up on the project '${project.name}'.
                 The current stage of the project is '${project.stage}'.
@@ -107,6 +115,13 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
             }
 
             if (prompt) {
+                const ai = getAI();
+                if (!ai) {
+                    setMessages(prev => [...prev, { id: `ai-err-${Date.now()}`, sender: 'ai', text: 'AI features are not available. Please configure VITE_GEMINI_API_KEY in your environment.', isHtml: false }]);
+                    setIsLoading(false);
+                    return;
+                }
+                
                 const response = await ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: prompt,
