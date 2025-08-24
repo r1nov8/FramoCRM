@@ -2,15 +2,12 @@ import { useState, useEffect } from 'react';
 
 // Helper to get API URL with runtime overrides and Render heuristic
 function resolveApiBase(): string {
-    // Build-time env from Vite
-    const envUrl = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
-
     // URL param override (?api=https://backend.example.com)
     try {
         if (typeof window !== 'undefined') {
             const q = new URLSearchParams(window.location.search);
             const api = q.get('api');
-            if (api && /^https?:\/\//i.test(api)) {
+            if (api && /^https?:\/\//.test(api)) {
                 localStorage.setItem('api_url_override', api);
                 // Clean the URL so param doesn't stick around
                 const url = new URL(window.location.href);
@@ -24,22 +21,24 @@ function resolveApiBase(): string {
     try {
         if (typeof localStorage !== 'undefined') {
             const o = localStorage.getItem('api_url_override');
-            if (o && /^https?:\/\//i.test(o)) return o;
+            if (o && /^https?:\/\//.test(o)) return o;
         }
     } catch {}
 
-    if (envUrl && /^https?:\/\//i.test(envUrl)) return envUrl;
-
-    // Heuristic: if hosted on Render static site, try swapping the subdomain to backend
+    // PRIORITY: Check if we're on Render - use proxy to avoid CORS
     try {
         if (typeof window !== 'undefined') {
-            const host = window.location.hostname; // e.g., framo-crm-frontend.onrender.com
-            if (/\.onrender\.com$/i.test(host)) {
+            const host = window.location.hostname;
+            if (/\.onrender\.com$/.test(host)) {
+                console.log('[API] Render detected, using /api proxy instead of build-time URL');
                 return "/api";
-                
             }
         }
     } catch {}
+
+    // Build-time env from Vite (fallback for non-Render environments)
+    const envUrl = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
+    if (envUrl && /^https?:\/\//.test(envUrl)) return envUrl;
 
     // Last resort: localhost (dev)
     return 'http://localhost:4000';
@@ -55,19 +54,15 @@ import { CompanyType } from '../types';
 import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS, INITIAL_TEAM_MEMBERS } from '../constants';
 
 const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
-    try {
         const storedValue = localStorage.getItem(key);
         return storedValue ? JSON.parse(storedValue) : defaultValue;
-    } catch (error) {
         console.error(`Error reading localStorage key “${key}”:`, error);
         return defaultValue;
     }
 };
 
 const saveToLocalStorage = <T,>(key: string, value: T) => {
-    try {
         localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
         console.error(`Error setting localStorage key “${key}”:`, error);
     }
 };
@@ -93,7 +88,6 @@ export const useCrmData = () => {
 
     const fetchProjects = async () => {
         if (MOCK) return; // use local initial projects
-        try {
             const res = await fetch(`${API_URL}/api/projects`);
             const data = await res.json();
             if (Array.isArray(data)) {
@@ -107,7 +101,6 @@ export const useCrmData = () => {
                 console.warn('[useCrmData] /api/projects returned unexpected payload; using demo seed');
                 setProjects(INITIAL_PROJECTS);
             }
-        } catch (err) {
             console.error('Failed to fetch projects:', err);
             // Fallback to demo data so UI isn’t blank in dev
             setProjects(INITIAL_PROJECTS);
@@ -116,48 +109,39 @@ export const useCrmData = () => {
 
     const fetchTasksForProject = async (projectId: string) => {
         if (MOCK) { return; }
-        try {
             const res = await fetch(`${API_URL}/api/projects/${projectId}/tasks`);
             const data = await res.json();
             setTasksByProject(prev => ({ ...prev, [projectId]: Array.isArray(data) ? data : [] }));
-        } catch (err) {
             console.error('Failed to fetch tasks:', err);
         }
     };
 
     const fetchActivitiesForProject = async (projectId: string) => {
         if (MOCK) { return; }
-        try {
             const res = await fetch(`${API_URL}/api/projects/${projectId}/activities`);
             const data = await res.json();
             setActivitiesByProject(prev => ({ ...prev, [projectId]: Array.isArray(data) ? data : [] }));
-        } catch (err) {
             console.error('Failed to fetch activities:', err);
         }
     };
 
     const fetchUnreadSummary = async () => {
         if (MOCK) { return; }
-        try {
             const res = await fetch(`${API_URL}/api/activities/unread-summary`, { headers: { ...authHeaders() } });
             if (!res.ok) return;
             const data = await res.json();
             if (data && typeof data.total === 'number' && Array.isArray(data.entries)) {
                 setUnreadSummary({ total: data.total, entries: data.entries.map((e: any) => ({ projectId: String(e.projectId), count: Number(e.count) })) });
             }
-        } catch (err) {
             console.error('Failed to fetch unread summary:', err);
         }
     };
 
     const markProjectActivitiesRead = async (projectId: string) => {
         if (MOCK) { return; }
-        try {
             const res = await fetch(`${API_URL}/api/projects/${projectId}/activities/mark-read`, { method: 'POST', headers: { ...authHeaders() } });
             if (!res.ok) return;
             // Refresh summary after marking read
-            try { await fetchUnreadSummary(); } catch {}
-        } catch (err) {
             console.error('Failed to mark read:', err);
         }
     };
@@ -169,7 +153,6 @@ export const useCrmData = () => {
             setTeamMembers(prev => prev.map(m => m.id === member.id ? { ...m, ...member } : m));
             return;
         }
-        try {
             const res = await fetch(`${API_URL}/api/team-members/${member.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -188,7 +171,6 @@ export const useCrmData = () => {
                 name: `${updatedRaw.first_name} ${updatedRaw.last_name}`
             };
             setTeamMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
-        } catch (err) {
             console.error('Update team member error:', err);
         }
     };
@@ -196,7 +178,6 @@ export const useCrmData = () => {
     // Backend fetch helpers we can reuse for reloads
     const fetchCompanies = async () => {
         if (MOCK) { setCompanies(INITIAL_COMPANIES); return; }
-        try {
             const res = await fetch(`${API_URL}/api/companies`);
             const data = await res.json();
             if (Array.isArray(data) && data.length) {
@@ -205,7 +186,6 @@ export const useCrmData = () => {
                 console.warn('[useCrmData] /api/companies empty or invalid; using demo seed');
                 setCompanies(INITIAL_COMPANIES);
             }
-        } catch (err) {
             console.error('Failed to fetch companies:', err);
             setCompanies(INITIAL_COMPANIES);
         }
@@ -213,7 +193,6 @@ export const useCrmData = () => {
 
     const fetchContacts = async () => {
         if (MOCK) { setContacts(INITIAL_CONTACTS); return; }
-        try {
             const res = await fetch(`${API_URL}/api/contacts`);
             const data = await res.json();
             if (Array.isArray(data) && data.length) {
@@ -222,7 +201,6 @@ export const useCrmData = () => {
                 console.warn('[useCrmData] /api/contacts empty or invalid; using demo seed');
                 setContacts(INITIAL_CONTACTS);
             }
-        } catch (err) {
             console.error('Failed to fetch contacts:', err);
             setContacts(INITIAL_CONTACTS);
         }
@@ -230,7 +208,6 @@ export const useCrmData = () => {
 
     const fetchTeamMembers = async () => {
         if (MOCK) { setTeamMembers(INITIAL_TEAM_MEMBERS); return; }
-        try {
             const res = await fetch(`${API_URL}/api/team-members`);
             const data = await res.json();
             const list = Array.isArray(data) ? data : [];
@@ -264,7 +241,6 @@ export const useCrmData = () => {
                     last_name: t.last_name || (t.name?.split(' ').slice(1).join(' ') || ''),
                 })) as any);
             }
-        } catch (err) {
             console.error('Failed to fetch team members:', err);
             setTeamMembers(INITIAL_TEAM_MEMBERS as any);
         }
@@ -298,12 +274,10 @@ export const useCrmData = () => {
         let timer: number | undefined;
 
         const tick = async () => {
-            try {
                 const hasToken = !!localStorage.getItem('token');
                 if (!hasToken) return; // only poll when logged in
                 if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return; // pause in background
                 await fetchUnreadSummary();
-            } catch {}
         };
 
         // Start interval
@@ -343,7 +317,6 @@ export const useCrmData = () => {
             setSelectedProjectId(created.id);
             return;
         }
-        try {
             console.log('[useCrmData] handleAddProject called with:', newProject);
             const normalized = normalizeProjectIds(newProject);
             console.log('[useCrmData] Normalized project:', normalized);
@@ -359,7 +332,6 @@ export const useCrmData = () => {
             const created = await res.json();
             setProjects(prev => [created, ...prev]);
             setSelectedProjectId(created.id);
-        } catch (err) {
             console.error('[useCrmData] Add project error:', err);
             alert('Failed to add project. See console for details.');
         }
@@ -370,7 +342,6 @@ export const useCrmData = () => {
             setProjects(prev => prev.map(p => p.id === updatedProject.id ? { ...p, ...updatedProject } : p));
             return;
         }
-        try {
             const normalized = normalizeProjectIds(updatedProject);
             const res = await fetch(`${API_URL}/api/projects/${updatedProject.id}`, {
                 method: 'PUT',
@@ -381,8 +352,6 @@ export const useCrmData = () => {
             const updated = await res.json();
             setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
             // Refresh activity log after project update
-            try { await fetchActivitiesForProject(String(updated.id)); } catch {}
-        } catch (err) {
             console.error('Update project error:', err);
         }
     };
@@ -405,7 +374,6 @@ export const useCrmData = () => {
             return new Promise<ProjectFile>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = async (event) => {
-                    try {
                         const fileData = {
                             projectId: Number(projectId),
                             name: file.name,
@@ -421,7 +389,6 @@ export const useCrmData = () => {
                         if (!res.ok) throw new Error('Failed to upload file');
                         const created = await res.json();
                         resolve(created);
-                    } catch (err) {
                         reject(err);
                     }
                 };
@@ -444,7 +411,6 @@ export const useCrmData = () => {
 
     // Add product to backend
     const handleAddProduct = async (projectId: string, product: Omit<Product, 'id'>) => {
-        try {
             const res = await fetch(`${API_URL}/api/products`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -452,7 +418,6 @@ export const useCrmData = () => {
             });
             if (!res.ok) throw new Error('Failed to add product');
             // Optionally update local state if needed
-        } catch (err) {
             console.error('Add product error:', err);
         }
     };
@@ -464,7 +429,6 @@ export const useCrmData = () => {
             setCompanies(prev => [created, ...prev]);
             return;
         }
-        try {
             // Normalize type to enum value
             let normalizedType = newCompany.type;
             if (Object.values(CompanyType).includes(newCompany.type as CompanyType)) {
@@ -484,7 +448,6 @@ export const useCrmData = () => {
             if (!res.ok) throw new Error('Failed to add company');
             const created = await res.json();
             setCompanies(prev => [created, ...prev]);
-        } catch (err) {
             console.error('Add company error:', err);
         }
     };
@@ -496,7 +459,6 @@ export const useCrmData = () => {
             setCompanies(prev => [created, ...prev]);
             return created;
         }
-        try {
             if (!payload?.name) throw new Error('Name is required');
             const res = await fetch(`${API_URL}/api/companies`, {
                 method: 'POST',
@@ -505,13 +467,11 @@ export const useCrmData = () => {
             });
             if (!res.ok) {
                 let msg = 'Failed to add company';
-                try { const txt = await res.text(); msg = `${res.status}: ${txt || msg}`; } catch {}
                 throw new Error(msg);
             }
             const created = await res.json();
             setCompanies(prev => [created, ...prev]);
             return created;
-        } catch (err) {
             console.error('Create company error:', err);
             throw err;
         }
@@ -528,7 +488,6 @@ export const useCrmData = () => {
             setCompanies(prev => prev.map(c => c.id === id ? { ...c, ...updated } : c));
             return updated as any;
         }
-        try {
             const id = update?.id;
             if (!id) throw new Error('Missing company id');
             const body = { ...update };
@@ -542,7 +501,6 @@ export const useCrmData = () => {
             const updated = await res.json();
             setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
             return updated;
-        } catch (err) {
             console.error('Update company error:', err);
             throw err;
         }
@@ -553,11 +511,9 @@ export const useCrmData = () => {
         // If ID isn't numeric (e.g., a local draft), just remove locally and skip server
         const idNum = Number(id);
         if (!Number.isInteger(idNum)) { setCompanies(prev => prev.filter(c => c.id !== id)); return; }
-        try {
             const res = await fetch(`${API_URL}/api/companies/${idNum}`, { method: 'DELETE' });
             if (!res.ok && res.status !== 204) throw new Error('Failed to delete company');
             setCompanies(prev => prev.filter(c => String(c.id) !== String(idNum)));
-        } catch (err) {
             console.error('Delete company error:', err);
             throw err;
         }
@@ -570,7 +526,6 @@ export const useCrmData = () => {
             setContacts(prev => [created, ...prev]);
             return;
         }
-        try {
             // Normalize companyId to integer if possible and map to company_id for backend
             let company_id = newContact.companyId;
             if (company_id && typeof company_id === 'string' && !isNaN(Number(company_id))) {
@@ -589,7 +544,6 @@ export const useCrmData = () => {
             if (!res.ok) throw new Error('Failed to add contact');
             const created = await res.json();
             setContacts(prev => [created, ...prev]);
-        } catch (err) {
             console.error('Add contact error:', err);
         }
     };
@@ -601,7 +555,6 @@ export const useCrmData = () => {
             setTeamMembers(prev => [created, ...prev]);
             return;
         }
-        try {
             const res = await fetch(`${API_URL}/api/team-members`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -620,7 +573,6 @@ export const useCrmData = () => {
                 name: `${createdRaw.first_name} ${createdRaw.last_name}`
             };
             setTeamMembers(prev => [created, ...prev]);
-        } catch (err) {
             console.error('Add team member error:', err);
         }
     };
@@ -632,14 +584,12 @@ export const useCrmData = () => {
             setTeamMembers(prev => prev.filter(m => m.id !== memberId));
             return;
         }
-        try {
             const res = await fetch(`${API_URL}/api/team-members/${memberId}`, { method: 'DELETE' });
             if (!res.ok && res.status !== 204) throw new Error('Failed to delete team member');
             setProjects(prevProjects =>
                 prevProjects.map(p => p.salesRepId === memberId ? { ...p, salesRepId: undefined } : p)
             );
             setTeamMembers(prev => prev.filter(m => m.id !== memberId));
-        } catch (err) {
             console.error('Delete team member error:', err);
         }
     };
@@ -696,7 +646,6 @@ export const useCrmData = () => {
         if (!res.ok) throw new Error('Failed to add task');
         const created = await res.json();
         setTasksByProject(prev => ({ ...prev, [projectId]: [created, ...(prev[projectId] || [])] }));
-    try { await fetchActivitiesForProject(projectId); } catch {}
         return created;
     };
 
@@ -720,7 +669,6 @@ export const useCrmData = () => {
             ...prev,
             [projectId]: (prev[projectId] || []).map(t => t.id === taskId ? updated : t)
         }));
-    try { await fetchActivitiesForProject(projectId); } catch {}
     };
 
     const handleDeleteTask = async (projectId: string, taskId: string) => {
@@ -731,7 +679,6 @@ export const useCrmData = () => {
     const res = await fetch(`${API_URL}/api/tasks/${taskId}`, { method: 'DELETE', headers: { ...authHeaders() } });
         if (!res.ok && res.status !== 204) throw new Error('Failed to delete task');
         setTasksByProject(prev => ({ ...prev, [projectId]: (prev[projectId] || []).filter(t => t.id !== taskId) }));
-    try { await fetchActivitiesForProject(projectId); } catch {}
     };
 
     // ---- Activities CRUD ----
