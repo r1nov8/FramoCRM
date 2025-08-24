@@ -35,8 +35,8 @@ function resolveApiBase(): string {
         if (typeof window !== 'undefined') {
             const host = window.location.hostname; // e.g., framo-crm-frontend.onrender.com
             if (/\.onrender\.com$/i.test(host)) {
-                const guess = host.replace('framo-crm-frontend', 'framo-crm-backend');
-                return `${window.location.protocol}//${guess}`;
+                return "/api";
+                
             }
         }
     } catch {}
