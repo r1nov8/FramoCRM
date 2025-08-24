@@ -1,4 +1,5 @@
 
+import { API_URL } from '../hooks/useCrmData';
 import React, { useState } from 'react';
 
 interface AuthFormProps {
@@ -17,7 +18,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
     setError('');
     setLoading(true);
     try {
-      const base = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      const base = API_URL;
       if (mode === 'register') {
         // Create the user first
         const regRes = await fetch(`${base}/api/register`, {
