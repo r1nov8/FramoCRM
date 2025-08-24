@@ -2,7 +2,7 @@
   "root": "dist/",
   "clean_urls": true,
   "routes": {
-    "/api/*": "https://framo-crm-backend.onrender.com/api/:splat"
+    "/api/*": "https://framocrm.onrender.com/api/:splat"
   },
   "headers": {
     "/index.html": {
