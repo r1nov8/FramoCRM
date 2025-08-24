@@ -18,6 +18,30 @@ View your app in AI Studio: https://ai.studio/apps/drive/1LU0H7WJrzGpVFUX0ljk_jv
 3. Run the app:
    `npm run dev`
 
+## VSCode + GitHub Copilot Setup
+
+For optimal development experience with GitHub Copilot:
+
+1. **Quick Setup**: Run the verification script:
+   ```bash
+   ./.vscode/setup-copilot.sh
+   ```
+
+2. **Open Workspace**: Use the optimized workspace configuration:
+   ```bash
+   code .vscode/FramoCRM.code-workspace
+   ```
+
+3. **Install Extensions**: VSCode will prompt you to install recommended extensions:
+   - GitHub Copilot
+   - GitHub Copilot Chat
+   - TypeScript and JavaScript Language Features
+   - Tailwind CSS IntelliSense
+
+4. **Troubleshooting**: If Copilot isn't working, see [.vscode/COPILOT_TROUBLESHOOTING.md](.vscode/COPILOT_TROUBLESHOOTING.md)
+
+The workspace is configured for optimal Copilot experience with both the React frontend and Node.js backend.
+
 ## File Share (Framo G:\\) Integration
 
 The backend can read from a corporate file share (e.g., G:\\ on Windows servers). Configure one of these env vars for the backend:
