@@ -1,9 +1,12 @@
 import 'dotenv/config';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { ToolDefinition } from '@modelcontextprotocol/sdk/types.js';
+import { 
+  ListToolsRequestSchema, 
+  CallToolRequestSchema,
+  CallToolRequest 
+} from '@modelcontextprotocol/sdk/types.js';
 import pkg from 'pg';
-import { fetch } from 'undici';
 
 const { Pool } = pkg;
 
@@ -16,115 +19,126 @@ const pool = DATABASE_URL
   ? new Pool({ connectionString: DATABASE_URL, ssl: DATABASE_URL.includes('render.com') ? { rejectUnauthorized: false } : undefined })
   : null;
 
-// Optional tool flags and config
-const HTTP_ENABLED = process.env.MCP_HTTP_ENABLED === 'true';
-const FILES_ENABLED = process.env.MCP_FILES_ENABLED === 'true';
-const API_URL = process.env.MCP_API_URL || process.env.VITE_API_URL || process.env.API_URL;
-const API_TOKEN = process.env.MCP_API_TOKEN; // optional bearer for backend
-
-// Define tools (minimal and read-only)
-const tools: ToolDefinition[] = [
-  {
-    name: 'db_query',
-    description: 'Run a read-only SQL SELECT against Postgres and return rows. Use strictly for SELECT; no writes allowed.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sql: { type: 'string', description: 'SQL SELECT query' },
-        params: { type: 'array', items: { type: ['string', 'number', 'null'] }, description: 'Parameterized values' }
-      },
-      required: ['sql']
-    }
-  },
-  ...(HTTP_ENABLED ? [{
-    name: 'http_get',
-    description: 'Perform a safe HTTP GET to a whitelisted origin and return text. For documentation/data retrieval only.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        url: { type: 'string', description: 'Absolute URL (https only)' }
-      },
-      required: ['url']
-    }
-  } as ToolDefinition] : []),
-  ...(FILES_ENABLED ? [{
-    name: 'files_list',
-    description: 'List files from backend read-only file API (proxied). Requires MCP_API_URL pointing to backend.',
-    inputSchema: {
-      type: 'object',
-      properties: { path: { type: 'string', description: 'Relative path from share root' } },
-      required: []
-    }
-  } as ToolDefinition, {
-    name: 'file_preview',
-    description: 'Preview a small text file content via backend file API (proxied).',
-    inputSchema: {
-      type: 'object',
-      properties: { path: { type: 'string', description: 'Relative file path' } },
-      required: ['path']
-    }
-  } as ToolDefinition] : [])
-];
-
 async function main() {
   if (!MCP_ENABLED) {
     console.error('[MCP] Disabled (MCP_ENABLED is not true). Exiting.');
     process.exit(0);
   }
 
-  const server = new Server({ name: 'framo-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
+  console.error('[MCP] Starting FramoCRM MCP Server...');
 
-  server.tool('db_query', async (args) => {
-    if (!pool) return { content: [{ type: 'text', text: 'No database configured' }] };
-    const sql = String(args.sql || '').trim();
-    if (!sql.toLowerCase().startsWith('select')) {
-      return { content: [{ type: 'text', text: 'Only SELECT is allowed' }] };
-    }
-    const params = Array.isArray(args.params) ? args.params : [];
-    const { rows } = await pool.query(sql, params);
-    return { content: [{ type: 'json', data: rows }] } as any;
+  const server = new Server(
+    { name: 'framo-mcp', version: '0.1.0' },
+    { capabilities: { tools: {} } }
+  );
+
+  // List available tools
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const tools = [
+      {
+        name: 'db_query',
+        description: 'Run a read-only SQL SELECT against the FramoCRM Postgres database and return rows. Use strictly for SELECT; no writes allowed.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sql: { 
+              type: 'string', 
+              description: 'SQL SELECT query to execute against the FramoCRM database' 
+            },
+            params: { 
+              type: 'array', 
+              items: { type: ['string', 'number', 'null'] }, 
+              description: 'Parameterized values for the SQL query' 
+            }
+          },
+          required: ['sql']
+        }
+      },
+      {
+        name: 'get_schema_info',
+        description: 'Get information about the FramoCRM database schema including table names and column information.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      }
+    ];
+
+    return { tools };
   });
 
-  if (HTTP_ENABLED) {
-    server.tool('http_get', async (args) => {
-      const url = String(args.url || '');
-      try {
-        const u = new URL(url);
-        if (u.protocol !== 'https:') return { content: [{ type: 'text', text: 'Only https is allowed' }] };
-      } catch {
-        return { content: [{ type: 'text', text: 'Invalid URL' }] };
+  // Handle tool calls
+  server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
+    const { name, arguments: args } = request.params;
+    
+    try {
+      if (name === 'db_query') {
+        if (!pool) {
+          return { content: [{ type: 'text', text: 'No database configured. Please set MCP_DATABASE_URL or DATABASE_URL environment variable.' }] };
+        }
+        const sql = String(args?.sql || '').trim();
+        if (!sql.toLowerCase().startsWith('select')) {
+          return { content: [{ type: 'text', text: 'Only SELECT queries are allowed for security. No INSERT, UPDATE, DELETE, or DDL statements.' }] };
+        }
+        const params = Array.isArray(args?.params) ? args.params : [];
+        const { rows } = await pool.query(sql, params);
+        return { content: [{ type: 'text', text: `Query executed successfully. Results:\n\n${JSON.stringify(rows, null, 2)}` }] };
       }
-      const res = await fetch(url, { method: 'GET' });
-      const text = await res.text();
-      return { content: [{ type: 'text', text: text.slice(0, 20000) }] };
-    });
-  }
 
-  if (FILES_ENABLED) {
-    if (!API_URL) {
-      console.warn('[MCP] FILES tools enabled but MCP_API_URL not set');
+      if (name === 'get_schema_info') {
+        if (!pool) {
+          return { content: [{ type: 'text', text: 'No database configured. Please set MCP_DATABASE_URL or DATABASE_URL environment variable.' }] };
+        }
+        
+        // Get table information
+        const tablesQuery = `
+          SELECT table_name, table_type 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          ORDER BY table_name;
+        `;
+        const { rows: tables } = await pool.query(tablesQuery);
+        
+        // Get column information for each table
+        const columnsQuery = `
+          SELECT table_name, column_name, data_type, is_nullable, column_default
+          FROM information_schema.columns 
+          WHERE table_schema = 'public' 
+          ORDER BY table_name, ordinal_position;
+        `;
+        const { rows: columns } = await pool.query(columnsQuery);
+        
+        const schemaInfo = {
+          tables,
+          columns: columns.reduce((acc: any, col: any) => {
+            if (!acc[col.table_name]) acc[col.table_name] = [];
+            acc[col.table_name].push({
+              name: col.column_name,
+              type: col.data_type,
+              nullable: col.is_nullable === 'YES',
+              default: col.column_default
+            });
+            return acc;
+          }, {})
+        };
+        
+        return { content: [{ type: 'text', text: `FramoCRM Database Schema:\n\n${JSON.stringify(schemaInfo, null, 2)}` }] };
+      }
+
+      return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
+    } catch (error: any) {
+      console.error(`[MCP] Error executing ${name}:`, error);
+      return { 
+        content: [{ type: 'text', text: `Error executing ${name}: ${error.message}` }], 
+        isError: true 
+      };
     }
-    const headers = API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : undefined;
-    server.tool('files_list', async (args) => {
-      if (!API_URL) return { content: [{ type: 'text', text: 'MCP_API_URL not configured' }] };
-      const p = args.path ? `?path=${encodeURIComponent(String(args.path))}` : '';
-      const r = await fetch(`${API_URL.replace(/\/$/, '')}/api/files${p}`, { headers });
-      if (!r.ok) return { content: [{ type: 'text', text: `Error: ${r.status}` }] };
-      const data = await r.json();
-      return { content: [{ type: 'json', data }] } as any;
-    });
-    server.tool('file_preview', async (args) => {
-      if (!API_URL) return { content: [{ type: 'text', text: 'MCP_API_URL not configured' }] };
-      const rel = String(args.path || '');
-      const r = await fetch(`${API_URL.replace(/\/$/, '')}/api/file?path=${encodeURIComponent(rel)}`, { headers });
-      if (!r.ok) return { content: [{ type: 'text', text: `Error: ${r.status}` }] };
-      const data = await r.json();
-      return { content: [{ type: 'json', data }] } as any;
-    });
-  }
+  });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  console.error('[MCP] Server connected and ready for requests');
 }
 
 main().catch((e) => {
