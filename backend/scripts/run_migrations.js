@@ -2,11 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pkg from 'pg';
+import dotenv from 'dotenv';
 
 const { Pool } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const backendDir = path.resolve(__dirname, '..');
+
+// Load environment variables from backend/.env for local runs
+dotenv.config({ path: path.join(backendDir, '.env') });
 
 function findSqlFiles() {
   const files = fs.readdirSync(backendDir);

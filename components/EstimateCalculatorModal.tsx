@@ -4,6 +4,15 @@ import type { Project, Company, TeamMember } from '../types';
 import { Currency, ProjectType } from '../types';
 import { PRICING_DATA } from '../data/pricingData';
 import type { Accessory, PumpPriceData, PumpVariant } from '../data/pricingData';
+import { DollarIcon } from './icons';
+
+// Formatting helpers
+function fmtInt(n: number): string {
+    return Math.ceil(n || 0).toLocaleString('en-US');
+}
+function fmtCurrency(n: number, locale: string, currency: string): string {
+    return new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: 0 }).format(Math.ceil(n || 0));
+}
 
 interface LineItem {
     id: string;
@@ -153,8 +162,14 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     const [agentCommissionPercent, setAgentCommissionPercent] = useState(4.0);
     const [profitMarginPercent, setProfitMarginPercent] = useState(50.0);
     const [bottomPercent, setBottomPercent] = useState(20.0);
-    const [targetPriceNOK, setTargetPriceNOK] = useState<number | null>(null);
     const [extraCommissioningDays, setExtraCommissioningDays] = useState<number>(0);
+    const [comments, setComments] = useState<string>(
+        [
+            'Kirk says WMMP is approx. USD 100,000 incl. stainless pipe / hydraulics.',
+            'Yard states that the Framo price is RMB 2,255,000 (approx. USD 315K with a rate of 0.140).',
+            'Note from PDF: Cost Price Plate: €5.50, Cost Price Pipe: €7.00'
+        ].join('\n')
+    );
     const EXTRA_DAY_RATE = 12000;
     const [startupLocation, setStartupLocation] = useState<string>(() => Object.keys((PRICING_DATA.antiHeeling?.startupLocations as any) || {})[0] || '');
     const startupAverage = useMemo(() => {
@@ -231,7 +246,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                 const newPumpType = value;
                 if (pumpItem.pumpType !== newPumpType) {
                     pumpItem.pumpType = newPumpType;
-                    const newPumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[pumpItem.pumpType as keyof typeof PRICING_DATA.cargoPumps];
+                    const newPumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[String(pumpItem.pumpType)];
                     if (newPumpData && newPumpData.prices.length > 0) {
                         const defaultLength = newPumpData.prices[0].length;
                         pumpItem.pumpLength = defaultLength;
@@ -261,7 +276,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
 
             // Recalculate price
             if (pumpItem.pumpType && !isAH) {
-                const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[pumpItem.pumpType as keyof typeof PRICING_DATA.cargoPumps];
+                const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[String(pumpItem.pumpType)];
                 if (pumpData) {
                     const priceEntry = pumpData.prices.find(p => p.length === pumpItem.pumpLength);
                     const variantKey = pumpItem.pumpVariant;
@@ -293,7 +308,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
             const pumpItem = newItems.find(i => i.isPump);
             if (!pumpItem || !pumpItem.pumpType) return prev;
 
-            const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[pumpItem.pumpType as keyof typeof PRICING_DATA.cargoPumps];
+            const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[String(pumpItem.pumpType)];
             let options: Accessory[] | undefined = [];
             if(item.isTrunk) options = pumpData.trunk;
             if(item.isAccessory) options = pumpData.optionalAccessories;
@@ -527,19 +542,19 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     }, [equipmentCost, adminPercent]);
     const vkxskp = useMemo(() => equipmentCost + adminAmount, [equipmentCost, adminAmount]);
 
-    // Sub total = Selvkost (VKxSKP) + Startup + Shipping
+    // Sub-Total = Full Cost (VKxSKP) + Startup + Shipping + Extra Days
     const subTotal = useMemo(() => {
-        return vkxskp + startupCost + shippingCost;
-    }, [vkxskp, startupCost, shippingCost]);
+        return vkxskp + startupCost + shippingCost + extraCommissioningCost;
+    }, [vkxskp, startupCost, shippingCost, extraCommissioningCost]);
     
     const agentCommissionAmount = useMemo(() => {
         return subTotal * (agentCommissionPercent / 100);
     }, [subTotal, agentCommissionPercent]);
 
-    // Final selvkost includes agent commission and extra commissioning cost
+    // Total Cost includes Sub-Total + Agent Commission
     const totalSelfCost = useMemo(() => {
-        return subTotal + agentCommissionAmount + extraCommissioningCost;
-    }, [subTotal, agentCommissionAmount, extraCommissioningCost]);
+        return subTotal + agentCommissionAmount;
+    }, [subTotal, agentCommissionAmount]);
 
     const profitAmount = useMemo(() => {
          return totalSelfCost * (profitMarginPercent / 100);
@@ -558,22 +573,24 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     }, [salesPriceNOK, eurRate]);
     const bottomAmount = useMemo(() => totalSelfCost * (bottomPercent / 100), [totalSelfCost, bottomPercent]);
     const bottomPriceNOK = useMemo(() => totalSelfCost + bottomAmount, [totalSelfCost, bottomAmount]);
-    const targetPriceUSD = useMemo(() => (targetPriceNOK || 0) / usdRate, [targetPriceNOK, usdRate]);
-    const targetPriceEUR = useMemo(() => (targetPriceNOK || 0) / eurRate, [targetPriceNOK, eurRate]);
 
-    useEffect(() => {
-        if (targetPriceNOK === null) {
-            setTargetPriceNOK(Math.ceil(salesPriceNOK));
-        }
-    }, [salesPriceNOK, targetPriceNOK]);
+    const targetPriceDisplay = useMemo(() => {
+        if (project.currency === Currency.USD) return fmtCurrency(salesPriceUSD, 'en-US', 'USD');
+        if (project.currency === Currency.EUR) return fmtCurrency(salesPriceEUR, 'de-DE', 'EUR');
+        return fmtCurrency(salesPriceNOK, 'nb-NO', 'NOK');
+    }, [project.currency, salesPriceUSD, salesPriceEUR, salesPriceNOK]);
+
+    const bottomPriceDisplay = useMemo(() => {
+        if (project.currency === Currency.USD) return fmtCurrency(bottomPriceNOK / usdRate, 'en-US', 'USD');
+        if (project.currency === Currency.EUR) return fmtCurrency(bottomPriceNOK / eurRate, 'de-DE', 'EUR');
+        return fmtCurrency(bottomPriceNOK, 'nb-NO', 'NOK');
+    }, [project.currency, bottomPriceNOK, usdRate, eurRate]);
     
     const pumpItem = lineItems.find(item => item.isPump);
     const trunkItem = lineItems.find(item => item.isTrunk);
     const accessoryItem = lineItems.find(item => item.isAccessory);
 
-    // Formatting helpers: always round up and show no decimals
-    const fmtInt = (n: number) => Math.ceil(n || 0).toLocaleString('en-US');
-    const fmtCurrency = (n: number, locale: string, currency: string) => new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: 0 }).format(Math.ceil(n || 0));
+    // ... formatting helpers are defined at module scope
 
     return (
         <Modal isOpen={true} onClose={onClose} title="Estimate Calculator" size="7xl">
@@ -603,7 +620,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                         <tbody>
                             {lineItems.map(item => {
                                 if (item.isPump && item.pumpType && pumpItem) {
-                                    const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[pumpItem.pumpType];
+                                    const pumpData = (PRICING_DATA.cargoPumps as Record<string, PumpPriceData>)[String(pumpItem.pumpType)];
                                     const availableLengths = pumpData ? pumpData.prices.map(p => p.length) : [];
                                     const availableVariants = pumpData && pumpData.prices.length > 0 ? Object.keys(pumpData.prices[0]).filter(k => k !== 'length') : [];
 
@@ -1253,6 +1270,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Average total (3 days incl. travel etc.).</div>
                             </div>
                         )}
+                        {false && isAH && null}
                         {isAH && (
                             <div className="p-2 mb-2 bg-green-50/60 dark:bg-green-900/20 rounded-md">
                                 <div className="font-semibold mb-1">Extra Commissioning Days beyond 3</div>
@@ -1264,39 +1282,6 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                 </div>
                             </div>
                         )}
-                        {/* Currency blocks moved to the right column after Sales Price */}
-                        <div className="p-2 mt-4 bg-yellow-100 dark:bg-yellow-900/50 rounded-md">
-                            <p className="font-semibold">Comments:</p>
-                            <p>Kirk says WMMP is approx. USD 100,000 incl. stainless pipe / hydraulics.</p>
-                            <p>Yard states that the Framo price is RMB 2,255,000 (approx. USD 315K with a rate of 0.140).</p>
-                            <p className="mt-2 text-xs italic">Note from PDF: Cost Price Plate: €5.50, Cost Price Pipe: €7.00</p>
-                        </div>
-                    </div>
-                    {/* Right column: Sales Price/summary */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                            <span>Verkskost (VK) SUM</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(equipmentCost)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Adm.tillegg (SKP)</span>
-                            <div className="flex items-center">
-                                <input type="number" value={adminPercent} onChange={e => setAdminPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
-                                <span className="font-semibold text-right w-32">{fmtInt(adminAmount)}</span>
-                            </div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Selvkost (VKxSKP)</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(vkxskp)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Startup (Commissioning)</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(startupCost)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Extra Commissioning Days</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(extraCommissioningCost)}</span>
-                        </div>
                         {isAH && (
                             <div className="p-2 mb-2 bg-blue-50 dark:bg-blue-900/30 rounded-md">
                                 <div className="font-semibold mb-1">Shipping (Commissioning Country)</div>
@@ -1312,24 +1297,62 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Standard system, 3-colli, 1–2 tonn.</div>
                             </div>
                         )}
-                        {/* Sub total before agent provision */}
-                        <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700">
-                            <span className="italic">Sub total</span>
-                            <span className="font-semibold text-right w-32">{fmtInt(subTotal)}</span>
+                        {/* Currency blocks moved to the right column after Sales Price */}
+                        <div className="p-2 mt-4 bg-yellow-100 dark:bg-yellow-900/50 rounded-md">
+                            <label className="block font-semibold mb-1" htmlFor="estimate-comments">Comments</label>
+                            <textarea
+                                id="estimate-comments"
+                                className="w-full p-2 text-sm bg-white dark:bg-gray-800 border border-yellow-300 dark:border-yellow-700 rounded-md min-h-[120px]"
+                                value={comments}
+                                onChange={e => setComments(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    {/* Right column: Summary and pricing */}
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span>Equipment Cost (VK)</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(equipmentCost)}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span>Agent provision</span>
+                            <span>Adm.Cost (SKP)</span>
+                            <div className="flex items-center">
+                                <input type="number" value={adminPercent} onChange={e => setAdminPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
+                                <span className="font-semibold text-right w-32">{fmtInt(adminAmount)}</span>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Full Cost</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(vkxskp)}</span>
+                        </div>
+                        <div className="pt-2 border-t dark:border-gray-700" />
+                        <div className="flex justify-between items-center">
+                            <span>Startup (Commissioning)</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(startupCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Startup extra days</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(extraCommissioningCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="italic">Sub-Total</span>
+                            <span className="font-semibold text-right w-32">{fmtInt(subTotal)}</span>
+                        </div>
+                        <div className="pt-2 border-t dark:border-gray-700" />
+                        <div className="flex justify-between items-center">
+                            <span>Agent Provisjon</span>
                             <div className="flex items-center">
                                 <input type="number" value={agentCommissionPercent} onChange={e => setAgentCommissionPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
                                 <span className="font-semibold text-right w-32">{fmtInt(agentCommissionAmount)}</span>
                             </div>
                         </div>
-                        <div className="flex justify-between items-center font-bold pt-2 border-t-2 dark:border-gray-600">
-                            <span>Final selvkost</span>
+                        <div className="pt-2 border-t dark:border-gray-700" />
+                        <div className="flex justify-between items-center font-bold">
+                            <span>Total Cost</span>
                             <span className="text-right w-32">{fmtInt(totalSelfCost)}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span>Salgspåslag/mark-up</span>
+                            <span>Mark-up</span>
                             <div className="flex items-center">
                                 <input type="number" value={profitMarginPercent} onChange={e => setProfitMarginPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
                                 <span className="font-semibold text-right w-32">{fmtInt(profitAmount)}</span>
@@ -1343,11 +1366,11 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                         <div className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md">
                             {(() => {
                                 const target = project.currency;
-                                const label = (t: string) => `Salgssum i ${t}`;
+                                const label = (t: string) => `Sales Price (${t})`;
                                 if (target === Currency.USD) {
                                     return (
                                         <div className="flex items-center">
-                                            <span className="w-40">{label('USD')}</span>
+                                            <span className="w-48">{label('USD')}</span>
                                             <span className="w-16">Rate:</span>
                                             <input type="number" step="0.01" value={usdRate} onChange={e => setUsdRate(parseFloat(e.target.value))} className="w-24 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
                                             <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
@@ -1359,7 +1382,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                 } else if (target === Currency.EUR) {
                                     return (
                                         <div className="flex items-center">
-                                            <span className="w-40">{label('EUR')}</span>
+                                            <span className="w-48">{label('EUR')}</span>
                                             <span className="w-16">Rate:</span>
                                             <input type="number" step="0.01" value={eurRate} onChange={e => setEurRate(parseFloat(e.target.value))} className="w-24 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
                                             <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
@@ -1372,7 +1395,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                 // Default NOK
                                 return (
                                     <div className="flex items-center">
-                                        <span className="w-40">{label('NOK')}</span>
+                                        <span className="w-48">{label('NOK')}</span>
                                         <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
                                             {fmtCurrency(salesPriceNOK, 'nb-NO', 'NOK')}
                                         </div>
@@ -1381,40 +1404,40 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                 );
                             })()}
                         </div>
+                        <div className="pt-2 border-t dark:border-gray-700" />
                         {/* Target & Bottom price */}
                         <div className="flex justify-between items-center mt-2">
-                            <span>Target price</span>
-                            <div className="flex items-center">
-                                <input type="number" value={targetPriceNOK ?? 0} onChange={e => setTargetPriceNOK(parseFloat(e.target.value))} className="w-32 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-2" />
-                                <span className="text-sm text-gray-600 dark:text-gray-300">{
-                                    project.currency === Currency.USD
-                                        ? fmtCurrency(targetPriceUSD, 'en-US', 'USD')
-                                        : project.currency === Currency.EUR
-                                            ? fmtCurrency(targetPriceEUR, 'de-DE', 'EUR')
-                                            : fmtCurrency(targetPriceNOK || 0, 'nb-NO', 'NOK')
-                                }</span>
-                            </div>
+                            <span>Target Price</span>
+                            <span className="text-right w-32 flex items-center justify-end">
+                                {project.currency === Currency.USD ? (
+                                    <DollarIcon className="h-4 w-4 mr-1" />
+                                ) : project.currency === Currency.EUR ? (
+                                    <span className="mr-1">€</span>
+                                ) : (
+                                    <span className="mr-1">kr</span>
+                                )}
+                                <span>{targetPriceDisplay}</span>
+                            </span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span>Påslag bottom</span>
+                            <span>Mark-up Bottom Price</span>
                             <div className="flex items-center">
                                 <input type="number" value={bottomPercent} onChange={e => setBottomPercent(parseFloat(e.target.value))} className="w-16 p-1 text-right bg-transparent border rounded-md dark:border-gray-600 mr-1" /> %
                                 <span className="font-semibold text-right w-32">{fmtInt(bottomAmount)}</span>
                             </div>
                         </div>
                         <div className="flex justify-between items-center font-semibold">
-                            <span>Bottom price NOK</span>
-                            <span className="text-right w-32">{fmtCurrency(bottomPriceNOK, 'nb-NO', 'NOK')}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-300">
-                            <span>Bottom price i {project.currency}</span>
-                            <span className="text-right w-32">{
-                                project.currency === Currency.USD
-                                    ? fmtCurrency(bottomPriceNOK / usdRate, 'en-US', 'USD')
-                                    : project.currency === Currency.EUR
-                                        ? fmtCurrency(bottomPriceNOK / eurRate, 'de-DE', 'EUR')
-                                        : fmtCurrency(bottomPriceNOK, 'nb-NO', 'NOK')
-                            }</span>
+                            <span>Bottom Price</span>
+                            <span className="text-right w-32 flex items-center justify-end">
+                                {project.currency === Currency.USD ? (
+                                    <DollarIcon className="h-4 w-4 mr-1" />
+                                ) : project.currency === Currency.EUR ? (
+                                    <span className="mr-1">€</span>
+                                ) : (
+                                    <span className="mr-1">kr</span>
+                                )}
+                                <span>{bottomPriceDisplay}</span>
+                            </span>
                         </div>
                     </div>
                 </div>

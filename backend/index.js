@@ -75,6 +75,27 @@ const pool = new Pool({
 // Ensure required tables exist (idempotent safety for dev)
 (async () => {
   try {
+    // Ensure auth-related schema is consistent (username/email columns and id sequence)
+    try {
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(255) UNIQUE");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE");
+      // Backfill missing username/email from each other where possible
+      await pool.query("UPDATE users SET username = COALESCE(username, NULLIF(split_part(email, '@', 1), ''))");
+      await pool.query("UPDATE users SET username = COALESCE(username, email)");
+      await pool.query("UPDATE users SET email = COALESCE(email, username)");
+      // Repair id sequence if it's out of sync (avoids duplicate key on insert)
+      await pool.query(`DO $$
+      DECLARE seq text; mx bigint;
+      BEGIN
+        SELECT pg_get_serial_sequence('users','id') INTO seq;
+        IF seq IS NOT NULL THEN
+          SELECT COALESCE(MAX(id),0) + 1 INTO mx FROM users;
+          PERFORM setval(seq, mx, false);
+        END IF;
+      END$$;`);
+    } catch (e) {
+      console.warn('Warning: users schema guard failed:', e?.message || e);
+    }
     await pool.query(`
       CREATE TABLE IF NOT EXISTS activity_reads (
         id SERIAL PRIMARY KEY,

@@ -13,11 +13,22 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS "Company Email Address" TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS "Group Company" TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS "Company Tel Number" TEXT;
 
--- 2) Copy data from existing columns if present
-UPDATE companies SET "Company" = COALESCE("Company", name);
-UPDATE companies SET "Company Primary Activity - Level 1" = COALESCE("Company Primary Activity - Level 1", type);
-UPDATE companies SET "Company Nationality/Region" = COALESCE("Company Nationality/Region", location);
-UPDATE companies SET "Company Website" = COALESCE("Company Website", website);
+-- Only copy from legacy columns if they exist
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='name') THEN
+    EXECUTE 'UPDATE companies SET "Company" = COALESCE("Company", name)';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='type') THEN
+    EXECUTE 'UPDATE companies SET "Company Primary Activity - Level 1" = COALESCE("Company Primary Activity - Level 1", type)';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='location') THEN
+    EXECUTE 'UPDATE companies SET "Company Nationality/Region" = COALESCE("Company Nationality/Region", location)';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='website') THEN
+    EXECUTE 'UPDATE companies SET "Company Website" = COALESCE("Company Website", website)';
+  END IF;
+END$$;
 -- Copy from previously created snake_case columns if they exist
 DO $$
 BEGIN
