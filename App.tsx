@@ -50,9 +50,9 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
         markProjectActivitiesRead,
     } = useData();
     // Update project price from estimator and close the modal
-    const handleUpdateProjectPriceAndCloseModal = (price: number, currency: Currency) => {
+    const handleUpdateProjectPriceAndCloseModal = (price: number, currency: Currency, selfCostPerVessel?: number) => {
         if (selectedProjectId) {
-            handleUpdateProjectPrice(selectedProjectId, price, currency);
+            handleUpdateProjectPrice(selectedProjectId, price, currency, selfCostPerVessel);
         }
         setIsEstimateCalculatorOpen(false);
     };

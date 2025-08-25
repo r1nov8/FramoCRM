@@ -58,7 +58,7 @@ interface EstimateCalculatorModalProps {
     project: Project;
     companies: Company[];
     teamMembers: TeamMember[];
-    onUpdateProjectPrice: (price: number, currency: Currency) => void;
+    onUpdateProjectPrice: (price: number, currency: Currency, selfCostPerVessel?: number) => void;
 }
 
 const pumpVariantDescriptions: { [key: string]: string } = {
@@ -158,7 +158,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     const [showExtras, setShowExtras] = useState(false);
     const [usdRate, setUsdRate] = useState(8.7);
     const [eurRate, setEurRate] = useState(11.7);
-    const [adminPercent, setAdminPercent] = useState(10);
+    const [adminPercent, setAdminPercent] = useState(40);
     const [agentCommissionPercent, setAgentCommissionPercent] = useState(4.0);
     const [profitMarginPercent, setProfitMarginPercent] = useState(50.0);
     const [bottomPercent, setBottomPercent] = useState(20.0);
@@ -207,6 +207,50 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     const shipyard = useMemo(() => companies.find(c => c.id === project.shipyardId), [companies, project.shipyardId]);
     const vesselOwner = useMemo(() => project.vesselOwnerId ? companies.find(c => c.id === project.vesselOwnerId) : undefined, [companies, project.vesselOwnerId]);
     const salesRep = useMemo(() => project.salesRepId ? teamMembers.find(m => m.id === project.salesRepId) : undefined, [teamMembers, project.salesRepId]);
+
+    // Persist/load lightweight estimator state per project
+    const storageKey = useMemo(() => `estimator_state_${project.id}`, [project.id]);
+    const saveEstimatorState = () => {
+        try {
+            const payload = {
+                lineItems,
+                adminPercent,
+                agentCommissionPercent,
+                profitMarginPercent,
+                bottomPercent,
+                usdRate,
+                eurRate,
+                extraCommissioningDays,
+                comments,
+                shippingRegion,
+                shippingAutoMap,
+                startupLocation,
+            };
+            localStorage.setItem(storageKey, JSON.stringify(payload));
+        } catch {}
+    };
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(storageKey);
+            if (!raw) return;
+            const s = JSON.parse(raw);
+            if (s && typeof s === 'object') {
+                if (Array.isArray(s.lineItems)) setLineItems(s.lineItems);
+                if (typeof s.adminPercent === 'number') setAdminPercent(s.adminPercent);
+                if (typeof s.agentCommissionPercent === 'number') setAgentCommissionPercent(s.agentCommissionPercent);
+                if (typeof s.profitMarginPercent === 'number') setProfitMarginPercent(s.profitMarginPercent);
+                if (typeof s.bottomPercent === 'number') setBottomPercent(s.bottomPercent);
+                if (typeof s.usdRate === 'number') setUsdRate(s.usdRate);
+                if (typeof s.eurRate === 'number') setEurRate(s.eurRate);
+                if (typeof s.extraCommissioningDays === 'number') setExtraCommissioningDays(s.extraCommissioningDays);
+                if (typeof s.comments === 'string') setComments(s.comments);
+                if (typeof s.shippingRegion === 'string') setShippingRegion(s.shippingRegion);
+                if (typeof s.shippingAutoMap === 'boolean') setShippingAutoMap(s.shippingAutoMap);
+                if (typeof s.startupLocation === 'string') setStartupLocation(s.startupLocation);
+            }
+        } catch {}
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [storageKey]);
 
     const handleItemChange = (id: string, field: 'qty' | 'unitPrice', value: number) => {
         setLineItems(prev => {
@@ -589,6 +633,13 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     const pumpItem = lineItems.find(item => item.isPump);
     const trunkItem = lineItems.find(item => item.isTrunk);
     const accessoryItem = lineItems.find(item => item.isAccessory);
+
+    // Use-this-price handler: save local estimator state and forward the chosen price
+    const handleUseThisPrice = (amount: number, currency: Currency) => {
+        saveEstimatorState();
+        // Persist both the chosen quote price and the self cost per vessel (totalSelfCost is per-vessel basis here)
+        onUpdateProjectPrice(amount, currency, totalSelfCost);
+    };
 
     // ... formatting helpers are defined at module scope
 
@@ -1322,7 +1373,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                             </div>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span>Full Cost</span>
+                            <span>Full Cost (VK+SKP)</span>
                             <span className="font-semibold text-right w-32">{fmtInt(vkxskp)}</span>
                         </div>
                         <div className="pt-2 border-t dark:border-gray-700" />
@@ -1376,7 +1427,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                             <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
                                                 {fmtCurrency(salesPriceUSD, 'en-US', 'USD')}
                                             </div>
-                                            <button onClick={() => onUpdateProjectPrice(salesPriceUSD, Currency.USD)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
+                                            <button onClick={() => handleUseThisPrice(salesPriceUSD, Currency.USD)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
                                         </div>
                                     );
                                 } else if (target === Currency.EUR) {
@@ -1388,7 +1439,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                             <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
                                                {fmtCurrency(salesPriceEUR, 'de-DE', 'EUR')}
                                             </div>
-                                            <button onClick={() => onUpdateProjectPrice(salesPriceEUR, Currency.EUR)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
+                                            <button onClick={() => handleUseThisPrice(salesPriceEUR, Currency.EUR)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
                                         </div>
                                     );
                                 }
@@ -1399,7 +1450,7 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                         <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
                                             {fmtCurrency(salesPriceNOK, 'nb-NO', 'NOK')}
                                         </div>
-                                        <button onClick={() => onUpdateProjectPrice(salesPriceNOK, Currency.NOK)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
+                                        <button onClick={() => handleUseThisPrice(salesPriceNOK, Currency.NOK)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
                                     </div>
                                 );
                             })()}

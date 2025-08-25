@@ -656,20 +656,50 @@ export const useCrmData = () => {
         );
     };
     
-    const handleUpdateProjectPrice = (projectId: string, price: number, currency: Currency) => {
+    const handleUpdateProjectPrice = async (projectId: string, price: number, currency: Currency, selfCostPerVessel?: number) => {
+        // Optimistic local update
         setProjects(prevProjects =>
             prevProjects.map(p => {
                 if (p.id === projectId) {
-                    return {
+                    const next: any = {
                         ...p,
                         pricePerVessel: price,
                         currency: currency,
                         value: p.numberOfVessels * price,
                     };
+                    if (typeof selfCostPerVessel === 'number') {
+                        next.selfCostPerVessel = selfCostPerVessel;
+                        const gm = price > 0 ? Math.round(((price - selfCostPerVessel) / price) * 100) : undefined;
+                        if (gm !== undefined) next.grossMarginPercent = gm;
+                    }
+                    return next;
                 }
                 return p;
             })
         );
+        if (MOCK) return;
+        try {
+            const body: any = { pricePerVessel: price, currency };
+            // Also update aggregate value server-side to keep in sync
+            const proj = projects.find(p => p.id === projectId);
+            if (proj) {
+                body.value = (proj.numberOfVessels || 1) * price;
+                if (typeof selfCostPerVessel === 'number') {
+                    body.selfCostPerVessel = selfCostPerVessel;
+                    if (price > 0) body.grossMarginPercent = Math.round(((price - selfCostPerVessel) / price) * 100);
+                }
+            }
+            const res = await fetch(`${API_URL}/api/projects/${projectId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) throw new Error('Failed to persist price');
+            const updated = await res.json();
+            setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+        } catch (err) {
+            console.error('Persist price error:', err);
+        }
     };
 
     // ---- Tasks CRUD ----

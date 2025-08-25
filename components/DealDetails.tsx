@@ -128,6 +128,12 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     };
     
     const isPriceEstimated = project.pricePerVessel !== undefined && project.pricePerVessel > 0;
+    const perVesselSelfCost = project.selfCostPerVessel && project.selfCostPerVessel > 0 ? project.selfCostPerVessel : undefined;
+    const grossMarginPct = useMemo(() => {
+        if (!perVesselSelfCost || !project.pricePerVessel) return undefined;
+        const gm = ((project.pricePerVessel - perVesselSelfCost) / project.pricePerVessel) * 100;
+        return Math.round(gm);
+    }, [perVesselSelfCost, project.pricePerVessel]);
 
     return (
         <>
@@ -174,7 +180,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                         {salesRep ? (
                             <div className="flex items-center justify-end mt-2">
                                 <div className="text-right mr-2">
-                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300">{salesRep.name}</p>
+                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300">{`${salesRep.first_name} ${salesRep.last_name}`.trim()}</p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">{salesRep.jobTitle}</p>
                                 </div>
                                 <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
@@ -450,13 +456,40 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                     <span className="font-semibold text-gray-800 dark:text-gray-200">{project.vesselSize.toLocaleString()} {project.vesselSizeUnit}</span>
                                 </div>
                             )}
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Price per Vessel</span>
-                                {isPriceEstimated ? 
+                            <div className="flex justify-between items-center gap-2">
+                                <span className="text-gray-600 dark:text-gray-400">Quote Price / Vessel</span>
+                                {isPriceEstimated ? (
                                     <span className="font-semibold text-gray-800 dark:text-gray-200">{currencySymbol}{project.pricePerVessel.toLocaleString()}</span>
-                                    : <span className="font-semibold text-gray-500 dark:text-gray-400 italic">To be estimated</span>
-                                }
+                                ) : (
+                                    <span className="font-semibold text-gray-500 dark:text-gray-400 italic">To be estimated</span>
+                                )}
                             </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Total Quote (All Vessels)</span>
+                                {isPriceEstimated ? (
+                                    <span className="font-semibold text-gray-800 dark:text-gray-200">{currencySymbol}{(project.pricePerVessel * project.numberOfVessels).toLocaleString()}</span>
+                                ) : (
+                                    <span className="font-semibold text-gray-500 dark:text-gray-400 italic">—</span>
+                                )}
+                            </div>
+                            {perVesselSelfCost !== undefined && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Self Cost / Vessel</span>
+                                    <span className="font-semibold text-gray-800 dark:text-gray-200">{currencySymbol}{perVesselSelfCost.toLocaleString()}</span>
+                                </div>
+                            )}
+                            {perVesselSelfCost !== undefined && isPriceEstimated && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Gross Margin / Vessel</span>
+                                    <span className="font-semibold text-gray-800 dark:text-gray-200">{currencySymbol}{(project.pricePerVessel - perVesselSelfCost).toLocaleString()}</span>
+                                </div>
+                            )}
+                            {grossMarginPct !== undefined && (
+                                <div className="flex justify-between pt-2 border-t dark:border-gray-700">
+                                    <span className="text-gray-600 dark:text-gray-400 flex items-center"><PercentIcon className="w-4 h-4 mr-1" /> Gross Margin</span>
+                                    <span className="font-semibold text-green-600 dark:text-green-400">{grossMarginPct}%</span>
+                                </div>
+                            )}
                              {showGrossMargin && (
                                 <div className="flex justify-between pt-2 border-t dark:border-gray-700">
                                     <span className="text-gray-600 dark:text-gray-400 flex items-center"><PercentIcon className="w-4 h-4 mr-1" /> Gross Margin</span>

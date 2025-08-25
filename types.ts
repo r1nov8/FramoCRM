@@ -157,6 +157,7 @@ export interface Project {
     numberOfVessels: number;
     pumpsPerVessel: number;
     pricePerVessel?: number;
+    selfCostPerVessel?: number;
     vesselSize?: number;
     vesselSizeUnit?: VesselSizeUnit;
     fuelType: FuelType;
