@@ -21,7 +21,18 @@ type Message = {
     hasCopyButton?: boolean;
 };
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize Google GenAI client with proper error handling
+const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+
+// Log configuration for debugging (remove in production)
+if (typeof window !== 'undefined') {
+    console.log('AI Assistant configuration:', {
+        hasApiKey: !!apiKey,
+        apiKeyLength: apiKey ? apiKey.length : 0,
+        isTestKey: apiKey === 'your_gemini_api_key_here'
+    });
+}
 
 const TypingIndicator = () => (
     <div className="flex items-center space-x-1 p-3">
@@ -64,6 +75,22 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
         setIsLoading(true);
 
         try {
+            // Check if AI client is available
+            if (!ai) {
+                const message = apiKey === 'your_gemini_api_key_here' 
+                    ? 'AI Assistant is not configured. Please replace "your_gemini_api_key_here" with your actual Gemini API key in the .env.local file. Get your API key from https://ai.studio/'
+                    : 'AI Assistant is not available. Please configure your GEMINI_API_KEY in .env.local file. You can get your API key from https://ai.studio/';
+                
+                setMessages(prev => [...prev, { 
+                    id: `ai-err-${Date.now()}`, 
+                    sender: 'ai', 
+                    text: message, 
+                    isHtml: false 
+                }]);
+                setIsLoading(false);
+                return;
+            }
+
             let prompt = '';
             const shipyard = companies.find(c => c.id === project.shipyardId);
             const vesselOwner = project.vesselOwnerId ? companies.find(c => c.id === project.vesselOwnerId) : undefined;
@@ -89,7 +116,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
                 `;
             } else if (actionType === 'email' && primaryContact && primaryContactCompany && salesRep) {
                 prompt = `You are a helpful sales assistant for Framo, a marine equipment supplier.
-                Draft a professional follow-up email from '${salesRep.name}' to '${primaryContact.name}' of '${primaryContactCompany.name}'.
+                Draft a professional follow-up email from '${salesRep.first_name} ${salesRep.last_name}' to '${primaryContact.name}' of '${primaryContactCompany.name}'.
     
                 The purpose of the email is to follow up on the project '${project.name}'.
                 The current stage of the project is '${project.stage}'.
