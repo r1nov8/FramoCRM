@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Modal } from './Modal';
 import type { Project, Company, Contact, TeamMember } from '../types';
-import { SparklesIcon, CopyIcon, NewspaperIcon, MailIcon, FileIcon } from './icons';
+import { SparklesIcon, CopyIcon, NewspaperIcon, MailIcon, FileIcon, PencilIcon, PlusIcon } from './icons';
 
 interface AIAssistantModalProps {
     isOpen: boolean;
@@ -58,7 +58,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isLoading]);
 
-    const handleAction = async (actionType: 'summarize' | 'email' | 'insights', userText: string) => {
+    const handleAction = async (actionType: 'summarize' | 'email' | 'insights' | 'update_project' | 'create_task' | 'add_note', userText: string, actionData?: any) => {
         const newUserMessage: Message = { id: `user-${Date.now()}`, sender: 'user', text: userText };
         setMessages(prev => [...prev, newUserMessage]);
         setIsLoading(true);
@@ -70,6 +70,123 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
             const primaryContact = project.primaryContactId ? contacts.find(c => c.id === project.primaryContactId) : undefined;
             const primaryContactCompany = primaryContact ? companies.find(c => c.id === primaryContact.companyId) : undefined;
             const salesRep = project.salesRepId ? teamMembers.find(tm => tm.id === project.salesRepId) : undefined;
+
+            // Handle data modification actions
+            if (actionType === 'update_project' && actionData) {
+                try {
+                    const response = await fetch(`${process.env.VITE_API_URL || 'http://localhost:4000'}/api/projects/${project.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                        },
+                        body: JSON.stringify(actionData.updates)
+                    });
+
+                    if (response.ok) {
+                        const updatedProject = await response.json();
+                        setMessages(prev => [...prev, { 
+                            id: `ai-${Date.now()}`, 
+                            sender: 'ai', 
+                            text: `✅ **Project Updated Successfully**\n\nI've updated the project with the following changes:\n${Object.entries(actionData.updates).map(([key, value]) => `- **${key}**: ${value}`).join('\n')}\n\nThe changes have been saved to the database.`,
+                            isHtml: true 
+                        }]);
+                        
+                        // Refresh the parent component's data
+                        if (window.location.reload) {
+                            setTimeout(() => window.location.reload(), 1000);
+                        }
+                        setIsLoading(false);
+                        return;
+                    } else {
+                        throw new Error(`Failed to update project: ${response.statusText}`);
+                    }
+                } catch (error) {
+                    setMessages(prev => [...prev, { 
+                        id: `ai-err-${Date.now()}`, 
+                        sender: 'ai', 
+                        text: `❌ Failed to update project: ${error.message}`,
+                        isHtml: false 
+                    }]);
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
+            if (actionType === 'create_task' && actionData) {
+                try {
+                    const response = await fetch(`${process.env.VITE_API_URL || 'http://localhost:4000'}/api/projects/${project.id}/tasks`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                        },
+                        body: JSON.stringify(actionData.task)
+                    });
+
+                    if (response.ok) {
+                        const createdTask = await response.json();
+                        setMessages(prev => [...prev, { 
+                            id: `ai-${Date.now()}`, 
+                            sender: 'ai', 
+                            text: `✅ **Task Created Successfully**\n\n**Task:** ${createdTask.title}\n**Priority:** ${createdTask.priority || 'Medium'}\n**Status:** ${createdTask.status || 'Open'}\n\nThe task has been added to the project and will appear in the task list.`,
+                            isHtml: true 
+                        }]);
+                        setIsLoading(false);
+                        return;
+                    } else {
+                        throw new Error(`Failed to create task: ${response.statusText}`);
+                    }
+                } catch (error) {
+                    setMessages(prev => [...prev, { 
+                        id: `ai-err-${Date.now()}`, 
+                        sender: 'ai', 
+                        text: `❌ Failed to create task: ${error.message}`,
+                        isHtml: false 
+                    }]);
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
+            if (actionType === 'add_note' && actionData) {
+                try {
+                    const response = await fetch(`${process.env.VITE_API_URL || 'http://localhost:4000'}/api/projects/${project.id}/activities`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            type: actionData.type || 'note',
+                            content: actionData.content,
+                            createdBy: 'AI Assistant'
+                        })
+                    });
+
+                    if (response.ok) {
+                        const createdActivity = await response.json();
+                        setMessages(prev => [...prev, { 
+                            id: `ai-${Date.now()}`, 
+                            sender: 'ai', 
+                            text: `✅ **Note Added Successfully**\n\nI've added the following note to the project:\n\n"${actionData.content}"\n\nThis will appear in the project activity timeline.`,
+                            isHtml: true 
+                        }]);
+                        setIsLoading(false);
+                        return;
+                    } else {
+                        throw new Error(`Failed to add note: ${response.statusText}`);
+                    }
+                } catch (error) {
+                    setMessages(prev => [...prev, { 
+                        id: `ai-err-${Date.now()}`, 
+                        sender: 'ai', 
+                        text: `❌ Failed to add note: ${error.message}`,
+                        isHtml: false 
+                    }]);
+                    setIsLoading(false);
+                    return;
+                }
+            }
 
             if (actionType === 'summarize') {
                 prompt = `You are a helpful sales assistant for Framo, a marine equipment supplier.
@@ -89,7 +206,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
                 `;
             } else if (actionType === 'email' && primaryContact && primaryContactCompany && salesRep) {
                 prompt = `You are a helpful sales assistant for Framo, a marine equipment supplier.
-                Draft a professional follow-up email from '${salesRep.name}' to '${primaryContact.name}' of '${primaryContactCompany.name}'.
+                Draft a professional follow-up email from '${salesRep.first_name} ${salesRep.last_name}' to '${primaryContact.name}' of '${primaryContactCompany.name}'.
     
                 The purpose of the email is to follow up on the project '${project.name}'.
                 The current stage of the project is '${project.stage}'.
@@ -164,19 +281,81 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
                 </div>
                 <div className="p-4 border-t dark:border-gray-700">
                     {!isLoading && (
-                        <div className="flex flex-wrap justify-center gap-3">
-                           <button onClick={() => handleAction('summarize', 'Summarize this project')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800">
-                                <FileIcon className="w-4 h-4" />
-                                Summarize Project
-                            </button>
-                             <button onClick={() => handleAction('email', 'Draft a follow-up email')} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-700 bg-green-100 rounded-lg hover:bg-green-200 dark:bg-green-900 dark:text-green-300 dark:hover:bg-green-800">
-                                <MailIcon className="w-4 h-4" />
-                                Draft Follow-up Email
-                            </button>
-                             <button onClick={() => handleAction('insights', `Get market insights for ${project.fuelType}`)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 dark:bg-purple-900 dark:text-purple-300 dark:hover:bg-purple-800">
-                                <NewspaperIcon className="w-4 h-4" />
-                                Market Insights
-                            </button>
+                        <div className="space-y-3">
+                            <div className="flex flex-wrap justify-center gap-2">
+                                <button onClick={() => handleAction('summarize', 'Summarize this project')} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800">
+                                    <FileIcon className="w-4 h-4" />
+                                    Summarize Project
+                                </button>
+                                <button onClick={() => handleAction('email', 'Draft a follow-up email')} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-green-700 bg-green-100 rounded-lg hover:bg-green-200 dark:bg-green-900 dark:text-green-300 dark:hover:bg-green-800">
+                                    <MailIcon className="w-4 h-4" />
+                                    Draft Follow-up Email
+                                </button>
+                                <button onClick={() => handleAction('insights', `Get market insights for ${project.fuelType}`)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 dark:bg-purple-900 dark:text-purple-300 dark:hover:bg-purple-800">
+                                    <NewspaperIcon className="w-4 h-4" />
+                                    Market Insights
+                                </button>
+                            </div>
+                            <div className="flex flex-wrap justify-center gap-2">
+                                <button 
+                                    onClick={() => {
+                                        const stage = prompt('Enter new project stage (Lead, OPP, RFQ, Quote, PO, Order Confirmation, Won, Lost, Cancelled):');
+                                        if (stage) {
+                                            handleAction('update_project', `Update project stage to ${stage}`, {
+                                                updates: { stage }
+                                            });
+                                        }
+                                    }} 
+                                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-orange-700 bg-orange-100 rounded-lg hover:bg-orange-200 dark:bg-orange-900 dark:text-orange-300 dark:hover:bg-orange-800"
+                                >
+                                    <PencilIcon className="w-4 h-4" />
+                                    Update Stage
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const notes = prompt('Enter project notes to update:');
+                                        if (notes) {
+                                            handleAction('update_project', `Update project notes`, {
+                                                updates: { notes }
+                                            });
+                                        }
+                                    }} 
+                                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-yellow-700 bg-yellow-100 rounded-lg hover:bg-yellow-200 dark:bg-yellow-900 dark:text-yellow-300 dark:hover:bg-yellow-800"
+                                >
+                                    <PencilIcon className="w-4 h-4" />
+                                    Update Notes
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const title = prompt('Enter task title:');
+                                        if (title) {
+                                            const priority = prompt('Enter priority (1=High, 2=Medium, 3=Low):', '2') || '2';
+                                            handleAction('create_task', `Create task: ${title}`, {
+                                                task: { title, priority: parseInt(priority) }
+                                            });
+                                        }
+                                    }} 
+                                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-700 bg-indigo-100 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-300 dark:hover:bg-indigo-800"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                    Create Task
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const content = prompt('Enter note content:');
+                                        if (content) {
+                                            handleAction('add_note', `Add note: ${content.substring(0, 50)}...`, {
+                                                content,
+                                                type: 'note'
+                                            });
+                                        }
+                                    }} 
+                                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-teal-700 bg-teal-100 rounded-lg hover:bg-teal-200 dark:bg-teal-900 dark:text-teal-300 dark:hover:bg-teal-800"
+                                >
+                                    <FileIcon className="w-4 h-4" />
+                                    Add Note
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
