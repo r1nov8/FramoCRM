@@ -637,8 +637,14 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     // Use-this-price handler: save local estimator state and forward the chosen price
     const handleUseThisPrice = (amount: number, currency: Currency) => {
         saveEstimatorState();
-        // Persist both the chosen quote price and the self cost per vessel (totalSelfCost is per-vessel basis here)
-        onUpdateProjectPrice(amount, currency, totalSelfCost);
+        // Persist both the chosen quote price and the self cost per vessel.
+        // Convert totalSelfCost (computed in NOK) into the selected project currency so GM% is correct.
+        const selfCostInCurrency = (() => {
+            if (currency === Currency.USD) return totalSelfCost / (usdRate || 1);
+            if (currency === Currency.EUR) return totalSelfCost / (eurRate || 1);
+            return totalSelfCost; // NOK
+        })();
+        onUpdateProjectPrice(amount, currency, selfCostInCurrency);
     };
 
     // ... formatting helpers are defined at module scope

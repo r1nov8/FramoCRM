@@ -130,10 +130,10 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     const isPriceEstimated = project.pricePerVessel !== undefined && project.pricePerVessel > 0;
     const perVesselSelfCost = project.selfCostPerVessel && project.selfCostPerVessel > 0 ? project.selfCostPerVessel : undefined;
     const grossMarginPct = useMemo(() => {
-        if (!perVesselSelfCost || !project.pricePerVessel) return undefined;
-        const gm = ((project.pricePerVessel - perVesselSelfCost) / project.pricePerVessel) * 100;
+        if (perVesselSelfCost === undefined || !isPriceEstimated) return undefined;
+        const gm = ((project.pricePerVessel! - perVesselSelfCost) / project.pricePerVessel!) * 100;
         return Math.round(gm);
-    }, [perVesselSelfCost, project.pricePerVessel]);
+    }, [perVesselSelfCost, isPriceEstimated, project.pricePerVessel]);
 
     return (
         <>
@@ -472,25 +472,13 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                     <span className="font-semibold text-gray-500 dark:text-gray-400 italic">—</span>
                                 )}
                             </div>
-                            {perVesselSelfCost !== undefined && (
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Self Cost / Vessel</span>
-                                    <span className="font-semibold text-gray-800 dark:text-gray-200">{currencySymbol}{perVesselSelfCost.toLocaleString()}</span>
-                                </div>
-                            )}
-                            {perVesselSelfCost !== undefined && isPriceEstimated && (
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Gross Margin / Vessel</span>
-                                    <span className="font-semibold text-gray-800 dark:text-gray-200">{currencySymbol}{(project.pricePerVessel - perVesselSelfCost).toLocaleString()}</span>
-                                </div>
-                            )}
                             {grossMarginPct !== undefined && (
                                 <div className="flex justify-between pt-2 border-t dark:border-gray-700">
                                     <span className="text-gray-600 dark:text-gray-400 flex items-center"><PercentIcon className="w-4 h-4 mr-1" /> Gross Margin</span>
                                     <span className="font-semibold text-green-600 dark:text-green-400">{grossMarginPct}%</span>
                                 </div>
                             )}
-                             {showGrossMargin && (
+                            {grossMarginPct === undefined && showGrossMargin && project.grossMarginPercent !== undefined && (
                                 <div className="flex justify-between pt-2 border-t dark:border-gray-700">
                                     <span className="text-gray-600 dark:text-gray-400 flex items-center"><PercentIcon className="w-4 h-4 mr-1" /> Gross Margin</span>
                                     <span className="font-semibold text-green-600 dark:text-green-400">{project.grossMarginPercent}%</span>
