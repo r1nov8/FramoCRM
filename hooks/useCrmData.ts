@@ -30,22 +30,13 @@ function resolveApiBase(): string {
         }
     } catch {}
 
-    // Heuristic: if hosted on Render static site, try swapping the subdomain to backend
-    try {
-        if (typeof window !== 'undefined') {
-            const host = window.location.hostname; // e.g., framo-crm-frontend.onrender.com
-            if (/\.onrender\.com$/i.test(host)) {
-                const guess = host.replace('framo-crm-frontend', 'framo-crm-backend');
-                return `${window.location.protocol}//${guess}`;
-            }
-        }
-    } catch {}
-
     // Last resort: localhost (dev)
     return 'http://localhost:4000';
 }
 
 export const API_URL = resolveApiBase();
+// Log resolved API base once for debugging production routing
+try { if (typeof window !== 'undefined') console.info('[CRM] API_URL =', API_URL); } catch {}
 const MOCK = (() => {
     const v = String((import.meta as any)?.env?.VITE_MOCK_MODE ?? '').toLowerCase().trim();
     return v === '1' || v === 'true' || v === 'yes';

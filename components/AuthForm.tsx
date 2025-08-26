@@ -48,7 +48,17 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
       const text = await res.text();
       // Some platforms can strip JSON headers; try parsing safely
       let data: any = {};
-      try { data = JSON.parse(text); } catch { throw new Error('Unexpected response from server'); }
+      try {
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          data = JSON.parse(text || '{}');
+        } else {
+          data = JSON.parse(text);
+        }
+      } catch {
+        const snippet = (text || '').slice(0, 160).replace(/\s+/g, ' ').trim();
+        throw new Error(snippet ? `Unexpected response: ${snippet}` : 'Unexpected response from server');
+      }
       onAuthSuccess(data.token, data.user || { name: username, initials: username.slice(0, 2).toUpperCase() });
     } catch (err: any) {
       setError(err.message);
