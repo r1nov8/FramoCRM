@@ -252,6 +252,30 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [storageKey]);
 
+    // Back-compat: ensure the Manometer line item exists for Anti-Heeling even if an older saved state didn't have it
+    useEffect(() => {
+        if (!isAH) return;
+        setLineItems(prev => {
+            if (prev.some(i => i.id === '1pa')) return prev;
+            const pumpQty = prev.find(i => i.isPump)?.qty ?? 0;
+            const manometerPrice = (PRICING_DATA.antiHeeling?.pumpAdditions?.['Manometer'] as number) || 0;
+            const manometerItem: LineItem = { id: '1pa', description: 'Manometer', isPumpAddition: true, qty: 0, unitPrice: manometerPrice };
+            const next = [...prev];
+            const pumpIdx = next.findIndex(i => i.isPump);
+            if (pumpIdx !== -1) {
+                next.splice(pumpIdx + 1, 0, manometerItem);
+            } else {
+                next.push(manometerItem);
+            }
+            // If user had intended it to be included before, mirror pump qty only when clearly non-zero and extras likely expected
+            if (pumpQty > 0 && ((prev as any)._manometerAssumedIncluded)) {
+                const idx = next.findIndex(i => i.id === '1pa');
+                if (idx > -1) next[idx] = { ...next[idx], qty: pumpQty };
+            }
+            return next;
+        });
+    }, [isAH, lineItems]);
+
     const handleItemChange = (id: string, field: 'qty' | 'unitPrice', value: number) => {
         setLineItems(prev => {
             let updatedItems = prev.map(item => item.id === id ? { ...item, [field]: value } : item);
