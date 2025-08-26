@@ -38,6 +38,14 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
           });
+          if (regRes.status === 404) {
+            // Last-resort ultra-generic path
+            regRes = await fetch(`${base}/api/_/register`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password })
+            });
+          }
         }
         if (!regRes.ok) {
           const regTxt = await regRes.text().catch(() => '');
@@ -64,6 +72,14 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
         });
+        if (res.status === 404) {
+          // Last-resort ultra-generic path
+          res = await fetch(`${base}/api/_/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+        }
       }
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
