@@ -21,7 +21,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
       const base = API_URL;
       if (mode === 'register') {
         // Create the user first
-        const regRes = await fetch(`${base}/api/register`, {
+        const regRes = await fetch(`${base}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
@@ -34,7 +34,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         }
       }
       // Then login to obtain JWT and user info
-      const res = await fetch(`${base}/api/login`, {
+  const res = await fetch(`${base}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
