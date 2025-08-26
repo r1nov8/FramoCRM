@@ -20,12 +20,18 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
     try {
       const base = API_URL;
       if (mode === 'register') {
-        // Create the user first
-        const regRes = await fetch(`${base}/api/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
+        // Create the user first (prefer adblock-safe path)
+        let regRes: Response | null = null;
+        try {
+          regRes = await fetch(`${base}/api/session/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+        } catch {
+          regRes = null;
+        }
+        // No fallback to '/login' style paths to avoid ad blockers
         if (!regRes.ok) {
           const regTxt = await regRes.text().catch(() => '');
           let msg = 'Registration failed';
@@ -34,7 +40,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         }
       }
       // Then login to obtain JWT and user info
-  const res = await fetch(`${base}/api/auth/login`, {
+      const res = await fetch(`${base}/api/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
