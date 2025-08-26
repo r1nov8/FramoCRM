@@ -8,7 +8,6 @@ const CompanyInfoPage: React.FC = () => {
 
     const { companies, reloadCompanies, handleCreateCompanySimple, handleUpdateCompany, handleDeleteCompany } = useData() as any;
     // CSV upload removed (one-time import is no longer part of the app)
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
     // Grid selection (controlled)
     const [selectedRows, setSelectedRows] = useState<ReadonlySet<number | string>>(new Set());
     // Trigger to insert a new draft row in the grid

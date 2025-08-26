@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { API_URL } from '../hooks/useCrmData';
 
 type FileItem = {
   name: string;
@@ -8,7 +9,6 @@ type FileItem = {
   relPath: string;
 };
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return '0 B';
