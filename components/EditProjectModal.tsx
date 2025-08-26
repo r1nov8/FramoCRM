@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Company, Contact, Project, Product, TeamMember } from '../types';
-import { ProjectStage, ProductType, CompanyType, Currency, VesselSizeUnit, FuelType } from '../types';
+import { ProjectStage, ProductType, CompanyType, Currency, VesselSizeUnit, FuelType, ProjectType } from '../types';
 import { Modal } from './Modal';
 import { PlusIcon, TrashIcon } from './icons';
 
@@ -70,10 +70,13 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
         }
     }, [project]);
 
+    const isAH = project?.projectType === ProjectType.ANTI_HEELING;
+    const oppLabel = isAH ? 'Project No.' : 'Opportunity No.';
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!projectName || !opportunityNumber || !salesRepId || !shipyardId || !currency) {
-            alert('Please fill in all required fields: Project Name, Opportunity No., Sales Rep, Shipyard, and Currency.');
+            alert(`Please fill in all required fields: Project Name, ${oppLabel}, Sales Rep, Shipyard, and Currency.`);
             return;
         }
         if (lateStagesForOrderNumber.includes(stage) && !orderNumber) {
@@ -239,7 +242,7 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
                         <input type="text" id="projectName" value={projectName} onChange={e => setProjectName(e.target.value)} className={inputClass} required />
                     </div>
                     <div>
-                        <label htmlFor="opportunityNumber" className={labelClass}>Opportunity No.</label>
+                        <label htmlFor="opportunityNumber" className={labelClass}>{oppLabel}</label>
                         <input type="text" id="opportunityNumber" value={opportunityNumber} onChange={e => setOpportunityNumber(e.target.value)} className={inputClass} required />
                     </div>
                 </div>
@@ -327,7 +330,10 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
                     <label htmlFor="salesRep" className={labelClass}>Sales Representative</label>
                     <select id="salesRep" value={salesRepId} onChange={e => setSalesRepId(e.target.value)} className={inputClass} required>
                         <option value="">Select Sales Rep</option>
-                        {teamMembers.map(tm => <option key={tm.id} value={String(tm.id)}>{tm.name}</option>)}
+                        {teamMembers.map(tm => {
+                            const fullName = [tm.first_name, tm.last_name].filter(Boolean).join(' ').trim() || tm.initials || String(tm.id);
+                            return <option key={tm.id} value={String(tm.id)}>{fullName}</option>;
+                        })}
                     </select>
                 </div>
 

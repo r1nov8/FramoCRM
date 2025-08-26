@@ -2,7 +2,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import type { Project, Company, Contact, TeamMember, ProjectFile } from '../types';
 import type { Task, Activity } from '../types';
 import { INITIAL_COMPANIES } from '../constants';
-import { ProjectStage, Currency } from '../types';
+import { ProjectStage, Currency, ProjectType } from '../types';
 import { CompanyCard } from './CompanyCard';
 import { ContactCard } from './ContactCard';
 import { ProductInfo } from './ProductInfo';
@@ -64,7 +64,7 @@ const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectSt
 
 export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator, isActive = false, onOpenActivity }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity } = useData();
+    const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity, saveProjectEstimate, generateProjectQuote } = useData();
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [taskFilter, setTaskFilter] = useState<'all' | 'open' | 'done' | 'overdue' | 'dueSoon'>('all');
     // Activity panel managed at App level
@@ -107,6 +107,24 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     // Always show tools to make calculators accessible at any stage
     const showTools = true;
 
+    const handleGenerateQuote = async () => {
+        try {
+            // Try to read estimator state saved by the modal
+            const key = `estimator_state_${project.id}`;
+            let payload: any = null;
+            try { const raw = localStorage.getItem(key); if (raw) payload = JSON.parse(raw); } catch {}
+            if (payload && typeof payload === 'object') {
+                try { await saveProjectEstimate(project.id, 'anti_heeling', payload); } catch (e) { console.warn('Save estimate failed (continuing):', e); }
+            }
+            const file = await generateProjectQuote(project.id, 'anti_heeling');
+            if (file) {
+                alert('Quote generated and added to Documents.');
+            }
+        } catch (e: any) {
+            alert(`Failed to generate quote: ${e?.message || 'Unknown error'}`);
+        }
+    };
+
 
     const handleFileUploadClick = () => {
         fileInputRef.current?.click();
@@ -143,7 +161,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{project.name}</h1>
                         <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            <span>Opp. No: <span className="font-semibold text-gray-700 dark:text-gray-300">{project.opportunityNumber}</span></span>
+                            <span>{project.projectType === ProjectType.ANTI_HEELING ? 'Project No' : 'Opp. No'}: <span className="font-semibold text-gray-700 dark:text-gray-300">{project.opportunityNumber}</span></span>
                              {project.orderNumber && <span className="border-l border-gray-300 dark:border-gray-600 pl-4">Order No: <span className="font-semibold text-gray-700 dark:text-gray-300">{project.orderNumber}</span></span>}
                         </div>
                         <p className="text-lg text-gray-600 dark:text-gray-300 mt-2">
@@ -240,6 +258,20 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                         Open
                                     </button>
                                 </div>
+                                {project.stage === ProjectStage.QUOTE && (
+                                    <div className="flex-1 min-w-[200px] p-4 border dark:border-gray-700 rounded-lg flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">
+                                        <div>
+                                            <h3 className="font-semibold flex items-center"><FileDocIcon className="w-5 h-5 mr-2 text-gray-500" /> Generate Quote</h3>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Save estimator and create a draft quote.</p>
+                                        </div>
+                                        <button 
+                                            onClick={handleGenerateQuote}
+                                            className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-gray-800"
+                                        >
+                                            Generate
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="flex-1 min-w-[200px] p-4 border dark:border-gray-700 rounded-lg flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">
                                     <div>
                                         <h3 className="font-semibold flex items-center"><CalculatorIcon className="w-5 h-5 mr-2 text-gray-500" /> HPU Sizing</h3>

@@ -733,6 +733,166 @@ app.delete('/api/project-files/:id', async (req, res) => {
   }
 });
 
+// --- Project Estimates & Quote Generation ---
+function estimateRowToApi(r) {
+  if (!r) return null;
+  return {
+    id: String(r.id),
+    projectId: String(r.project_id),
+    type: r.type || 'anti_heeling',
+    data: r.data || {},
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : undefined,
+    updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : undefined,
+  };
+}
+
+// Get estimate for a project (by type)
+app.get('/api/projects/:id/estimates', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const type = (req.query.type && String(req.query.type)) || 'anti_heeling';
+    const { rows } = await pool.query('SELECT * FROM project_estimates WHERE project_id = $1 AND type = $2', [id, type]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(estimateRowToApi(rows[0]));
+  } catch (err) {
+    console.error('Get estimate error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Save (upsert) estimate for a project
+app.post('/api/projects/:id/estimates', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type = 'anti_heeling', data } = req.body || {};
+    if (!data || typeof data !== 'object') return res.status(400).json({ error: 'Missing data' });
+    const { rows } = await pool.query(
+      `INSERT INTO project_estimates (project_id, type, data)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (project_id, type)
+       DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+       RETURNING *`,
+      [id, type, data]
+    );
+    try {
+      const ins = await pool.query(
+        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [id, 'note', `Estimate saved (${type})`, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
+      );
+      try {
+        if (req.user?.id && ins.rows[0]?.id) {
+          await pool.query('INSERT INTO activity_reads (activity_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id]);
+        }
+      } catch {}
+    } catch {}
+    res.status(201).json(estimateRowToApi(rows[0]));
+  } catch (err) {
+    console.error('Save estimate error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Generate a simple text quote document from project + estimate
+app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type = 'anti_heeling' } = req.body || {};
+    const pr = await pool.query('SELECT * FROM projects WHERE id = $1', [id]);
+    const proj = pr.rows[0];
+    if (!proj) return res.status(404).json({ error: 'Project not found' });
+  const est = await pool.query('SELECT * FROM project_estimates WHERE project_id = $1 AND type = $2', [id, type]);
+    if (!est.rows.length) return res.status(400).json({ error: 'No estimate data saved' });
+
+    // Gather minimal related info (companies) for shipyard and owner names
+    let shipyardName = '';
+    if (proj.shipyard_id) {
+      try {
+        const c = await pool.query('SELECT "Company" as name FROM companies WHERE id = $1', [proj.shipyard_id]);
+        shipyardName = c.rows[0]?.name || '';
+      } catch {}
+    }
+    let ownerName = '';
+    if (proj.vessel_owner_id) {
+      try {
+        const c = await pool.query('SELECT "Company" as name FROM companies WHERE id = $1', [proj.vessel_owner_id]);
+        ownerName = c.rows[0]?.name || '';
+      } catch {}
+    }
+
+  const now = new Date();
+    const ymd = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const currency = proj.currency || 'USD';
+    const pricePerVessel = proj.price_per_vessel != null ? Number(proj.price_per_vessel) : 0;
+    const numberOfVessels = proj.number_of_vessels != null ? Number(proj.number_of_vessels) : 1;
+    const total = pricePerVessel * numberOfVessels;
+    const gm = proj.gross_margin_percent != null ? `${proj.gross_margin_percent}%` : 'n/a';
+    const estData = est.rows[0].data || {};
+    const comments = (estData.comments && String(estData.comments)) || '';
+    const shippingRegion = (estData.shippingRegion && String(estData.shippingRegion)) || '';
+    const startupLocation = (estData.startupLocation && String(estData.startupLocation)) || '';
+
+    const lines = [];
+  lines.push(isAntiHeeling ? 'Quote Anti-Heeling' : 'Quote');
+    lines.push('');
+    lines.push(`Date: ${ymd}`);
+  // In Anti-Heeling, show Project.no (maps to opportunity_number in DB)
+  lines.push(`Project: ${proj.name}`);
+  if (proj.opportunity_number) {
+    lines.push(`${isAntiHeeling ? 'Project.no' : 'Opp. No'}: ${proj.opportunity_number}`);
+  }
+    if (shipyardName) lines.push(`Shipyard: ${shipyardName}`);
+    if (ownerName) lines.push(`Vessel Owner: ${ownerName}`);
+    if (proj.vessel_size && proj.vessel_size_unit) lines.push(`Vessel Size: ${proj.vessel_size} ${proj.vessel_size_unit}`);
+    lines.push('');
+    lines.push('Commercials');
+    lines.push(`- Currency: ${currency}`);
+    lines.push(`- Quote Price / Vessel: ${pricePerVessel.toLocaleString()} ${currency}`);
+    lines.push(`- Number of Vessels: ${numberOfVessels}`);
+    lines.push(`- Total Quote: ${total.toLocaleString()} ${currency}`);
+    lines.push(`- Gross Margin: ${gm}`);
+    lines.push('');
+    lines.push('Estimator Summary');
+    if (startupLocation) lines.push(`- Startup Location: ${startupLocation}`);
+    if (shippingRegion) lines.push(`- Shipping Region: ${shippingRegion}`);
+    if (comments) {
+      lines.push('');
+      lines.push('Notes:');
+      lines.push(comments);
+    }
+    lines.push('');
+    lines.push('This is an automatically generated draft quote.');
+
+    const content = lines.join('\n');
+    const buf = Buffer.from(content, 'utf8');
+    const base64 = buf.toString('base64');
+  const fileNameSafe = (proj.name || 'quote').replace(/[^a-z0-9-_]+/gi, '_');
+  const oppPart = proj.opportunity_number ? `_Opp-${String(proj.opportunity_number).replace(/[^a-z0-9-_]+/gi, '')}` : '';
+  const prefix = isAntiHeeling ? 'Quote_Anti-Heeling' : 'Quote';
+  const fileName = `${prefix}${oppPart}_${fileNameSafe}_${ymd}.txt`;
+    const { rows: fileRows } = await pool.query(
+      'INSERT INTO project_files (project_id, name, type, size, content) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [id, fileName, 'text/plain', buf.length, base64]
+    );
+
+    try {
+      const ins = await pool.query(
+        'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [id, 'note', `Generated quote document: ${fileName}`, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
+      );
+      try {
+        if (req.user?.id && ins.rows[0]?.id) {
+          await pool.query('INSERT INTO activity_reads (activity_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id]);
+        }
+      } catch {}
+    } catch {}
+
+    res.status(201).json(fileRows[0]);
+  } catch (err) {
+    console.error('Generate quote error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // --- Tasks CRUD Endpoints ---
 // Expected DB schema:
 // CREATE TABLE IF NOT EXISTS tasks (

@@ -97,6 +97,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     teamMembers = teamMembers || [];
 
     const [vesselType, setVesselType] = useState('');
+    const oppLabel = projectType === ProjectType.ANTI_HEELING ? 'Project No.' : 'Opportunity No.';
     const [projectName, setProjectName] = useState('');
     // Anti-Heeling specific fields
     const [ahDate, setAhDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
@@ -172,7 +173,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
             if (projectType === ProjectType.ANTI_HEELING) {
                 // Validate Anti-Heeling minimal required fields
                 if (!ahDate || !ahProjectNo || !shipyardId || !stage) {
-                    alert('Please fill in Project no, Status, and Shipyard.');
+                    alert('Please fill in Project No., Status, and Shipyard.');
                     return;
                 }
             } else {
@@ -185,7 +186,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
             const oppToCheck = projectType === ProjectType.ANTI_HEELING ? ahProjectNo : opportunityNumber;
             const duplicate = projects.some((p: any) => p.opportunityNumber === oppToCheck);
             if (duplicate) {
-                setOppError('Opp. No in use');
+                setOppError(projectType === ProjectType.ANTI_HEELING ? 'Project No in use' : 'Opp. No in use');
                 return;
             } else {
                 setOppError(null);
@@ -384,7 +385,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className={labelClass}>Project no</label>
+                                <label className={labelClass}>Project No.</label>
                                 <input type="text" value={ahProjectNo} onChange={e => setAhProjectNo(e.target.value)} className={inputClass + (oppError ? ' border-red-500' : '')} required />
                                 {oppError && <p className="text-red-500 text-xs mt-1">{oppError}</p>}
                             </div>
@@ -489,7 +490,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                                 <input type="text" id="projectName" value={projectName} onChange={e => setProjectName(e.target.value)} className={inputClass} required />
                             </div>
                             <div>
-                                <label htmlFor="opportunityNumber" className={labelClass}>Opportunity No.</label>
+                                <label htmlFor="opportunityNumber" className={labelClass}>{oppLabel}</label>
                                 <input type="text" id="opportunityNumber" value={opportunityNumber} onChange={e => setOpportunityNumber(e.target.value)} className={inputClass + (oppError ? ' border-red-500' : '')} required />
                                 {oppError && <p className="text-red-500 text-xs mt-1">{oppError}</p>}
                             </div>

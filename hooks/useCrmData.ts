@@ -47,10 +47,10 @@ function resolveApiBase(): string {
 
 export const API_URL = resolveApiBase();
 const MOCK = (() => {
-    const v = String(import.meta.env.VITE_MOCK_MODE ?? '').toLowerCase().trim();
+    const v = String((import.meta as any)?.env?.VITE_MOCK_MODE ?? '').toLowerCase().trim();
     return v === '1' || v === 'true' || v === 'yes';
 })();
-import type { Project, Company, Contact, TeamMember, ProjectFile, Currency, Task, Activity } from '../types';
+import type { Project, Company, Contact, TeamMember, ProjectFile, Currency, Task, Activity, Product } from '../types';
 import { CompanyType } from '../types';
 import { INITIAL_PROJECTS, INITIAL_COMPANIES, INITIAL_CONTACTS, INITIAL_TEAM_MEMBERS } from '../constants';
 
@@ -572,7 +572,7 @@ export const useCrmData = () => {
         }
         try {
             // Normalize companyId to integer if possible and map to company_id for backend
-            let company_id = newContact.companyId;
+            let company_id: string | number | null = (newContact as any).companyId ?? null;
             if (company_id && typeof company_id === 'string' && !isNaN(Number(company_id))) {
                 company_id = Number(company_id);
             }
@@ -789,6 +789,40 @@ export const useCrmData = () => {
         return created;
     };
 
+    // ---- Estimates & Quote helpers ----
+    const saveProjectEstimate = async (projectId: string, type: string, data: any) => {
+        if (MOCK) return { id: `est-${Date.now()}`, projectId, type, data } as any;
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/estimates`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ type, data })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    };
+
+    const getProjectEstimate = async (projectId: string, type: string) => {
+        if (MOCK) return null;
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/estimates?type=${encodeURIComponent(type)}`, { headers: { ...authHeaders() } });
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    };
+
+    const generateProjectQuote = async (projectId: string, type: string = 'anti_heeling') => {
+        if (MOCK) return null;
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/generate-quote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ type })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const file = await res.json();
+        // Attach to project.files in state for immediate visibility
+        setProjects(prev => prev.map(p => p.id === projectId ? { ...p, files: [...(p.files || []), file as any] } : p));
+        return file;
+    };
+
     return {
         projects,
         companies,
@@ -816,6 +850,9 @@ export const useCrmData = () => {
     activitiesByProject,
     unreadSummary,
     handleAddActivity,
+    saveProjectEstimate,
+    getProjectEstimate,
+    generateProjectQuote,
     reloadActivitiesForProject: fetchActivitiesForProject,
     reloadUnreadSummary: fetchUnreadSummary,
     markProjectActivitiesRead,
