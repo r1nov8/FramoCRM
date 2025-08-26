@@ -799,12 +799,24 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                                 <td className="p-2 text-right">
                                                     <input type="number" value={item.qty} onChange={e => handleItemChange(item.id, 'qty', parseFloat(e.target.value))} className="w-20 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
                                                 </td>
-                                                <td className="p-2 text-right font-medium">
-                                                    {fmtInt(item.unitPrice || 0)}
-                                                </td>
-                                                <td className="p-2 text-right font-medium">
-                                                    {fmtInt(item.qty * (item.unitPrice || 0))}
-                                                </td>
+                                                {(() => {
+                                                    // For Anti-Heeling, when Extras are hidden, include Manometer cost in the pump row display
+                                                    const baseUnit = item.unitPrice || 0;
+                                                    const manItem = isAH ? lineItems.find(i => i.id === '1pa') : undefined;
+                                                    const includeManInPumpRow = isAH && !showExtras && manItem && (manItem.qty || 0) > 0;
+                                                    const displayUnit = includeManInPumpRow ? (baseUnit + (manItem?.unitPrice || 0)) : baseUnit;
+                                                    const displayTotal = (item.qty || 0) * displayUnit;
+                                                    return (
+                                                        <>
+                                                            <td className="p-2 text-right font-medium">
+                                                                {fmtInt(displayUnit)}
+                                                            </td>
+                                                            <td className="p-2 text-right font-medium">
+                                                                {fmtInt(displayTotal)}
+                                                            </td>
+                                                        </>
+                                                    );
+                                                })()}
                                             </tr>
                                             {!isAH && trunkItem && accessoryItem && (
                                                 <tr className="border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 align-bottom">
