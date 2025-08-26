@@ -119,6 +119,16 @@ const pool = new Pool({
       )`);
   // Ensure project_type exists on projects (idempotent)
   await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_type TEXT');
+  // Ensure columns used by project create/update exist even if migrations lag behind
+  try {
+    await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS self_cost_per_vessel NUMERIC');
+    await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS flow_description TEXT');
+    await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS flow_capacity_m3h NUMERIC');
+    await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS flow_mwc NUMERIC');
+    await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS flow_power_kw NUMERIC');
+  } catch (e) {
+    console.warn('Warning: projects flow/self_cost guards failed:', e?.message || e);
+  }
   } catch (e) {
     console.warn('Warning: failed ensuring activity_reads table:', e?.message || e);
   }
