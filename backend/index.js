@@ -54,10 +54,11 @@ app.use(cors({
   origin: function (origin, callback) {
     // allow requests with no origin (like mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
-    const okList = allowedOrigins.includes(origin);
+  const okList = allowedOrigins.includes(origin);
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\\d+)?$/i.test(origin || '');
     const allowOnrender = process.env.ALLOW_ONRENDER === 'true';
     const isOnRender = /\.onrender\.com$/i.test((origin || '').replace(/^https?:\/\//, '').split('/')[0] || '');
-    if (okList || (allowOnrender && isOnRender)) {
+  if (okList || isLocalhost || (allowOnrender && isOnRender)) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'), false);
