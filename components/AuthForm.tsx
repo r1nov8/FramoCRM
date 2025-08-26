@@ -19,7 +19,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
     setLoading(true);
     try {
       const base = API_URL;
-      if (mode === 'register') {
+  if (mode === 'register') {
         // Create the user first (prefer adblock-safe path), fallback if missing
         let regRes: Response | null = null;
         try {
@@ -28,17 +28,22 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
           });
-        } catch {
+        } catch (e) {
+          // Network/adblock error: treat as missing and try next route
           regRes = null;
         }
-        if (!regRes || regRes.status === 404) {
+        if (!regRes || regRes.status === 404 || regRes.type === 'opaqueredirect') {
           // Backend may not have session endpoints; use auth aliases
-          regRes = await fetch(`${base}/api/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-          });
-          if (regRes.status === 404) {
+          try {
+            regRes = await fetch(`${base}/api/auth/register`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password })
+            });
+          } catch {
+            regRes = null;
+          }
+          if (!regRes || regRes.status === 404) {
             // Last-resort ultra-generic path
             regRes = await fetch(`${base}/api/_/register`, {
               method: 'POST',
@@ -63,16 +68,21 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
           body: JSON.stringify({ username, password })
         });
       } catch {
+        // Network/adblock error, try alias
         res = null;
       }
-      if (!res || res.status === 404) {
+      if (!res || res.status === 404 || res.type === 'opaqueredirect') {
         // Fallback when session endpoint isn’t present in the backend release
-        res = await fetch(`${base}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        if (res.status === 404) {
+        try {
+          res = await fetch(`${base}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+        } catch {
+          res = null;
+        }
+        if (!res || res.status === 404) {
           // Last-resort ultra-generic path
           res = await fetch(`${base}/api/_/start`, {
             method: 'POST',

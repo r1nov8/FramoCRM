@@ -17,6 +17,10 @@ dist
 dist-ssr
 *.local
 
+# Do not commit environment files (frontend uses .env.local locally; Render injects env)
+.env
+.env.*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
