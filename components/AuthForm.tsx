@@ -20,7 +20,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
     try {
       const base = API_URL;
       if (mode === 'register') {
-        // Create the user first (prefer adblock-safe path)
+        // Create the user first (prefer adblock-safe path), fallback if missing
         let regRes: Response | null = null;
         try {
           regRes = await fetch(`${base}/api/session/register`, {
@@ -31,7 +31,14 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         } catch {
           regRes = null;
         }
-        // No fallback to '/login' style paths to avoid ad blockers
+        if (!regRes || regRes.status === 404) {
+          // Backend may not have session endpoints; use auth aliases
+          regRes = await fetch(`${base}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+        }
         if (!regRes.ok) {
           const regTxt = await regRes.text().catch(() => '');
           let msg = 'Registration failed';
@@ -40,11 +47,24 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         }
       }
       // Then login to obtain JWT and user info
-      const res = await fetch(`${base}/api/session/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
+      let res: Response | null = null;
+      try {
+        res = await fetch(`${base}/api/session/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+      } catch {
+        res = null;
+      }
+      if (!res || res.status === 404) {
+        // Fallback when session endpoint isn’t present in the backend release
+        res = await fetch(`${base}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+      }
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         let msg = 'Login failed';
