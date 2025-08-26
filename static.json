@@ -1,9 +1,6 @@
 {
   "root": "dist/",
   "clean_urls": true,
-  "routes": {
-    "/api/*": "https://framocrm.onrender.com/api/:splat"
-  },
   "headers": {
     "/index.html": {
       "Cache-Control": "no-cache, no-store, must-revalidate"

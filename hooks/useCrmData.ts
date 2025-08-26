@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 
 // Helper to get API URL with runtime overrides and Render heuristic
 function resolveApiBase(): string {
-    // Build-time env from Vite
+    // Build-time env from Vite (prefer this in hosted builds)
     const envUrl = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
+
+    if (envUrl && /^https?:\/\//i.test(envUrl)) return envUrl;
 
     // URL param override (?api=https://backend.example.com)
     try {
@@ -20,15 +22,13 @@ function resolveApiBase(): string {
         }
     } catch {}
 
-    // LocalStorage override takes precedence
+    // LocalStorage override (useful in local/dev without VITE_API_URL)
     try {
         if (typeof localStorage !== 'undefined') {
             const o = localStorage.getItem('api_url_override');
             if (o && /^https?:\/\//i.test(o)) return o;
         }
     } catch {}
-
-    if (envUrl && /^https?:\/\//i.test(envUrl)) return envUrl;
 
     // Heuristic: if hosted on Render static site, try swapping the subdomain to backend
     try {
@@ -707,6 +707,11 @@ export const useCrmData = () => {
                     body.selfCostPerVessel = selfCostPerVessel;
                     if (price > 0) body.grossMarginPercent = Math.round(((price - selfCostPerVessel) / price) * 100);
                 }
+                // Include any known flow fields so a subsequent server response doesn't wipe optimistic UI
+                if (proj.flowDescription !== undefined) body.flowDescription = proj.flowDescription;
+                if (proj.flowCapacityM3h !== undefined) body.flowCapacityM3h = proj.flowCapacityM3h;
+                if (proj.flowMwc !== undefined) body.flowMwc = proj.flowMwc;
+                if (proj.flowPowerKw !== undefined) body.flowPowerKw = proj.flowPowerKw;
             }
             const res = await fetch(`${API_URL}/api/projects/${projectId}`, {
                 method: 'PUT',

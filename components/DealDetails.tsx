@@ -107,6 +107,28 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     // Always show tools to make calculators accessible at any stage
     const showTools = true;
 
+    // Fallback: read flow from last saved estimator state if project doesn't have it yet
+    const flowFallback = useMemo(() => {
+        const hasProjectFlow = !!(project.flowDescription || project.flowCapacityM3h || project.flowMwc || project.flowPowerKw);
+        if (hasProjectFlow) return null;
+        try {
+            const key = `estimator_state_${project.id}`;
+            const raw = localStorage.getItem(key);
+            if (!raw) return null;
+            const s = JSON.parse(raw);
+            const f = s && s.flow;
+            if (!f) return null;
+            const cap = f.capacityM3h ?? null;
+            const mwc = f.mwc ?? null;
+            const kw = f.powerKw ?? null;
+            const desc = (typeof f.description === 'string' && f.description.trim()) ? f.description.trim() : null;
+            if (desc || cap != null || mwc != null || kw != null) {
+                return { description: desc, capacityM3h: cap, mwc, powerKw: kw } as { description: string | null; capacityM3h: number | null; mwc: number | null; powerKw: number | null };
+            }
+        } catch {}
+        return null;
+    }, [project.id, project.flowDescription, project.flowCapacityM3h, project.flowMwc, project.flowPowerKw]);
+
     const handleGenerateQuote = async () => {
         try {
             // Try to read estimator state saved by the modal
@@ -251,11 +273,19 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                             {project.products.map((product, index) => (
                                 <ProductInfo key={index} product={product} />
                             ))}
-                            {(project.flowDescription || project.flowCapacityM3h || project.flowMwc || project.flowPowerKw) && (
+                            {(project.flowDescription || project.flowCapacityM3h || project.flowMwc || project.flowPowerKw || flowFallback) && (
                                 <div className="mt-2 pt-3 border-t dark:border-gray-700">
                                     <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Flow Specification</div>
                                     <div className="font-semibold text-gray-800 dark:text-gray-200">
-                                        {project.flowDescription ? project.flowDescription : `${project.flowCapacityM3h ?? '—'} m3/h @ ${project.flowMwc ?? '—'} mwc @ ${project.flowPowerKw ?? '—'} kW`}
+                                        {project.flowDescription
+                                            ? project.flowDescription
+                                            : (
+                                                flowFallback && !project.flowCapacityM3h && !project.flowMwc && !project.flowPowerKw
+                                                    ? (
+                                                        flowFallback.description || `${flowFallback.capacityM3h ?? '—'} m3/h @ ${flowFallback.mwc ?? '—'} mwc @ ${flowFallback.powerKw ?? '—'} kW`
+                                                    )
+                                                    : `${project.flowCapacityM3h ?? '—'} m3/h @ ${project.flowMwc ?? '—'} mwc @ ${project.flowPowerKw ?? '—'} kW`
+                                            )}
                                     </div>
                                 </div>
                             )}

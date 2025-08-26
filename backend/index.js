@@ -66,6 +66,18 @@ app.use(cors({
 }));
 // Increase payload limit to support larger CSV uploads wrapped in JSON
 app.use(express.json({ limit: '25mb' }));
+// Force JSON content type for API responses by default
+app.use((req, res, next) => {
+  if (req.path && req.path.startsWith('/api/')) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  }
+  next();
+});
+
+// Simple health endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, uptime: process.uptime() });
+});
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://crmuser:crmpassword@localhost:5432/crmdb',
@@ -820,6 +832,10 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
   const est = await pool.query('SELECT * FROM project_estimates WHERE project_id = $1 AND type = $2', [id, type]);
     if (!est.rows.length) return res.status(400).json({ error: 'No estimate data saved' });
 
+    // Determine if this is an Anti-Heeling quote for labeling and filename
+    const isAntiHeeling = (String(type || '')).toLowerCase() === 'anti_heeling'
+      || /anti[-_ ]?heeling/i.test(String(proj.project_type || ''));
+
     // Gather minimal related info (companies) for shipyard and owner names
     let shipyardName = '';
     if (proj.shipyard_id) {
@@ -848,15 +864,15 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
     const shippingRegion = (estData.shippingRegion && String(estData.shippingRegion)) || '';
     const startupLocation = (estData.startupLocation && String(estData.startupLocation)) || '';
 
-    const lines = [];
+  const lines = [];
   lines.push(isAntiHeeling ? 'Quote Anti-Heeling' : 'Quote');
     lines.push('');
     lines.push(`Date: ${ymd}`);
-  // In Anti-Heeling, show Project.no (maps to opportunity_number in DB)
-  lines.push(`Project: ${proj.name}`);
-  if (proj.opportunity_number) {
-    lines.push(`${isAntiHeeling ? 'Project.no' : 'Opp. No'}: ${proj.opportunity_number}`);
-  }
+    // In Anti-Heeling, show Project.no (maps to opportunity_number in DB)
+    lines.push(`Project: ${proj.name}`);
+    if (proj.opportunity_number) {
+      lines.push(`${isAntiHeeling ? 'Project.no' : 'Opp. No'}: ${proj.opportunity_number}`);
+    }
     if (shipyardName) lines.push(`Shipyard: ${shipyardName}`);
     if (ownerName) lines.push(`Vessel Owner: ${ownerName}`);
     if (proj.vessel_size && proj.vessel_size_unit) lines.push(`Vessel Size: ${proj.vessel_size} ${proj.vessel_size_unit}`);

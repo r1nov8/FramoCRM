@@ -26,8 +26,12 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
         });
-        const regData = await regRes.json();
-        if (!regRes.ok) throw new Error(regData.error || 'Registration failed');
+        if (!regRes.ok) {
+          const regTxt = await regRes.text().catch(() => '');
+          let msg = 'Registration failed';
+          try { const j = JSON.parse(regTxt); if (j?.error) msg = j.error; } catch {}
+          throw new Error(`${msg}${regTxt ? ` (${regRes.status})` : ''}`);
+        }
       }
       // Then login to obtain JWT and user info
       const res = await fetch(`${base}/api/login`, {
@@ -35,8 +39,16 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Invalid credentials');
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        let msg = 'Login failed';
+        try { const j = JSON.parse(txt); if (j?.error) msg = j.error; } catch {}
+        throw new Error(`${msg}${res.status ? ` (${res.status})` : ''}`);
+      }
+      const text = await res.text();
+      // Some platforms can strip JSON headers; try parsing safely
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { throw new Error('Unexpected response from server'); }
       onAuthSuccess(data.token, data.user || { name: username, initials: username.slice(0, 2).toUpperCase() });
     } catch (err: any) {
       setError(err.message);
