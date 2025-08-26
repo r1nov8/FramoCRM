@@ -64,7 +64,7 @@ const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectSt
 
 export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator, isActive = false, onOpenActivity }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity, saveProjectEstimate, generateProjectQuote } = useData();
+    const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity, saveProjectEstimate, generateProjectQuote, updateProjectFields } = useData();
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [taskFilter, setTaskFilter] = useState<'all' | 'open' | 'done' | 'overdue' | 'dueSoon'>('all');
     // Activity panel managed at App level
@@ -113,6 +113,18 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
             const key = `estimator_state_${project.id}`;
             let payload: any = null;
             try { const raw = localStorage.getItem(key); if (raw) payload = JSON.parse(raw); } catch {}
+            // If flow info exists in estimator payload, patch project first so backend has it when composing the quote
+            if (payload && payload.flow) {
+                const f = payload.flow as any;
+                const patch: any = {};
+                if (f.description) patch.flowDescription = f.description;
+                if (f.capacityM3h !== undefined && f.capacityM3h !== null) patch.flowCapacityM3h = Number(f.capacityM3h);
+                if (f.mwc !== undefined && f.mwc !== null) patch.flowMwc = Number(f.mwc);
+                if (f.powerKw !== undefined && f.powerKw !== null) patch.flowPowerKw = Number(f.powerKw);
+                if (Object.keys(patch).length > 0) {
+                    try { await updateProjectFields(project.id, patch); } catch {}
+                }
+            }
             if (payload && typeof payload === 'object') {
                 try { await saveProjectEstimate(project.id, 'anti_heeling', payload); } catch (e) { console.warn('Save estimate failed (continuing):', e); }
             }
@@ -236,9 +248,17 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                         <h2 className="text-xl font-semibold mb-4">Products & Specifications</h2>
                         <div className="space-y-4">
-                        {project.products.map((product, index) => (
-                            <ProductInfo key={index} product={product} />
-                        ))}
+                            {project.products.map((product, index) => (
+                                <ProductInfo key={index} product={product} />
+                            ))}
+                            {(project.flowDescription || project.flowCapacityM3h || project.flowMwc || project.flowPowerKw) && (
+                                <div className="mt-2 pt-3 border-t dark:border-gray-700">
+                                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Flow Specification</div>
+                                    <div className="font-semibold text-gray-800 dark:text-gray-200">
+                                        {project.flowDescription ? project.flowDescription : `${project.flowCapacityM3h ?? '—'} m3/h @ ${project.flowMwc ?? '—'} mwc @ ${project.flowPowerKw ?? '—'} kW`}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                     
@@ -504,6 +524,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                     <span className="font-semibold text-gray-500 dark:text-gray-400 italic">—</span>
                                 )}
                             </div>
+                            {/* Flow Specification moved to Products & Specifications card */}
                             {grossMarginPct !== undefined && (
                                 <div className="flex justify-between pt-2 border-t dark:border-gray-700">
                                     <span className="text-gray-600 dark:text-gray-400 flex items-center"><PercentIcon className="w-4 h-4 mr-1" /> Gross Margin</span>

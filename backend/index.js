@@ -285,6 +285,10 @@ function projectRowToApi(r) {
     vesselSize: r.vessel_size !== null && r.vessel_size !== undefined ? Number(r.vessel_size) : undefined,
     vesselSizeUnit: r.vessel_size_unit || undefined,
     fuelType: r.fuel_type,
+  flowDescription: r.flow_description || undefined,
+  flowCapacityM3h: r.flow_capacity_m3h !== null && r.flow_capacity_m3h !== undefined ? Number(r.flow_capacity_m3h) : undefined,
+  flowMwc: r.flow_mwc !== null && r.flow_mwc !== undefined ? Number(r.flow_mwc) : undefined,
+  flowPowerKw: r.flow_power_kw !== null && r.flow_power_kw !== undefined ? Number(r.flow_power_kw) : undefined,
     products: [],
     files: [],
   };
@@ -307,7 +311,8 @@ app.post('/api/projects', requireAuth, async (req, res) => {
     const cols = [
       'name','project_type','opportunity_number','order_number','stage','value','currency','hedge_currency','gross_margin_percent','closing_date',
       'sales_rep_id','shipyard_id','vessel_owner_id','design_company_id','primary_contact_id','notes','number_of_vessels','pumps_per_vessel',
-      'price_per_vessel','vessel_size','vessel_size_unit','fuel_type'
+      'price_per_vessel','vessel_size','vessel_size_unit','fuel_type',
+      'flow_description','flow_capacity_m3h','flow_mwc','flow_power_kw'
     ];
     const vals = [
       b.name,
@@ -329,9 +334,13 @@ app.post('/api/projects', requireAuth, async (req, res) => {
       b.numberOfVessels ?? 1,
       b.pumpsPerVessel ?? 1,
       b.pricePerVessel ?? null,
-      b.vesselSize ?? null,
-      b.vesselSizeUnit || null,
-      b.fuelType
+  b.vesselSize ?? null,
+  b.vesselSizeUnit || null,
+  b.fuelType,
+  b.flowDescription || null,
+  b.flowCapacityM3h ?? null,
+  b.flowMwc ?? null,
+  b.flowPowerKw ?? null
     ];
     const placeholders = vals.map((_, i) => `$${i + 1}`);
     const { rows } = await pool.query(
@@ -356,7 +365,7 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
       const r0 = await pool.query('SELECT * FROM projects WHERE id = $1', [id]);
       before = r0.rows[0] || null;
     } catch {}
-    const map = {
+  const map = {
       name: 'name',
       projectType: 'project_type',
       opportunityNumber: 'opportunity_number',
@@ -380,6 +389,10 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
       vesselSize: 'vessel_size',
       vesselSizeUnit: 'vessel_size_unit',
       fuelType: 'fuel_type',
+  flowDescription: 'flow_description',
+  flowCapacityM3h: 'flow_capacity_m3h',
+  flowMwc: 'flow_mwc',
+  flowPowerKw: 'flow_power_kw',
     };
     const updates = [];
     const values = [];
@@ -406,7 +419,7 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
     const updated = rows[0];
     try {
       // Compute diffs but only include curated fields and avoid noisy date strings
-      const fields = ['number_of_vessels','pumps_per_vessel','price_per_vessel','vessel_size','vessel_size_unit','fuel_type','stage','value','currency','gross_margin_percent'];
+      const fields = ['number_of_vessels','pumps_per_vessel','price_per_vessel','vessel_size','vessel_size_unit','fuel_type','stage','value','currency','gross_margin_percent','flow_description','flow_capacity_m3h','flow_mwc','flow_power_kw'];
       const labels = {
         number_of_vessels: 'number_of_vessels',
         pumps_per_vessel: 'pumps_per_vessel',
@@ -417,7 +430,11 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
         stage: 'stage',
         value: 'value',
         currency: 'currency',
-        gross_margin_percent: 'gross_margin_percent'
+        gross_margin_percent: 'gross_margin_percent',
+        flow_description: 'flow_description',
+        flow_capacity_m3h: 'flow_capacity_m3h',
+        flow_mwc: 'flow_mwc',
+        flow_power_kw: 'flow_power_kw'
       };
       const changes = [];
       if (before) {
@@ -851,6 +868,16 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
     lines.push(`- Total Quote: ${total.toLocaleString()} ${currency}`);
     lines.push(`- Gross Margin: ${gm}`);
     lines.push('');
+    if (proj.flow_description || proj.flow_capacity_m3h || proj.flow_mwc || proj.flow_power_kw) {
+      lines.push('Flow Specification');
+      const descr = proj.flow_description || '';
+      const cap = proj.flow_capacity_m3h != null ? `${Number(proj.flow_capacity_m3h)} m3/h` : '';
+      const mwc = proj.flow_mwc != null ? `${Number(proj.flow_mwc)} mwc` : '';
+      const kw = proj.flow_power_kw != null ? `${Number(proj.flow_power_kw)} kW` : '';
+      const parts = [cap, mwc, kw].filter(Boolean).join(' @ ');
+      lines.push(`- ${descr || parts || '—'}`);
+      lines.push('');
+    }
     lines.push('Estimator Summary');
     if (startupLocation) lines.push(`- Startup Location: ${startupLocation}`);
     if (shippingRegion) lines.push(`- Shipping Region: ${shippingRegion}`);

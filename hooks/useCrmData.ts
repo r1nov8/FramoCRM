@@ -387,6 +387,25 @@ export const useCrmData = () => {
         }
     };
 
+    // Patch a subset of project fields (server supports partial PUT bodies)
+    const updateProjectFields = async (projectId: string, patch: Partial<Project> & Record<string, any>) => {
+        // Optimistic local update
+        setProjects(prev => prev.map(p => p.id === projectId ? { ...p, ...patch } as Project : p));
+        if (MOCK) return;
+        try {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify(patch)
+            });
+            if (!res.ok) throw new Error('Failed to patch project');
+            const updated = await res.json();
+            setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+        } catch (err) {
+            console.error('Patch project error:', err);
+        }
+    };
+
     // File upload and product upload should use backend as well (not just local)
     const handleUploadFiles = async (projectId: string, files: FileList) => {
         if (MOCK) {
@@ -843,6 +862,7 @@ export const useCrmData = () => {
         handleUploadFiles,
         handleDeleteFile,
     handleUpdateProjectPrice,
+    updateProjectFields,
     tasksByProject,
     handleAddTask,
     handleUpdateTask,

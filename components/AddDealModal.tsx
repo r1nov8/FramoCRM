@@ -135,6 +135,11 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
     const [designCompanyId, setDesignCompanyId] = useState('');
     const [primaryContactId, setPrimaryContactId] = useState('');
     const [notes, setNotes] = useState('');
+    // Flow spec fields
+    const [flowDescription, setFlowDescription] = useState('');
+    const [flowCapacityM3h, setFlowCapacityM3h] = useState<number | ''>('');
+    const [flowMwc, setFlowMwc] = useState<number | ''>('');
+    const [flowPowerKw, setFlowPowerKw] = useState<number | ''>('');
     const initialProducts: Product[] = projectType === ProjectType.ANTI_HEELING
         ? []
         : [{ type: ProductType.SD_100, quantity: 1, capacity: 100, head: 100 }];
@@ -244,6 +249,10 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                 vesselSize: typeof vesselSize === 'number' ? vesselSize : undefined,
                 vesselSizeUnit: vesselSizeUnit || undefined,
                 fuelType: (fuelType || null) as any,
+                flowDescription: projectType === ProjectType.ANTI_HEELING ? undefined : (flowDescription || undefined),
+                flowCapacityM3h: projectType === ProjectType.ANTI_HEELING ? (flowCapacityM3h === '' ? undefined : Number(flowCapacityM3h)) : undefined,
+                flowMwc: projectType === ProjectType.ANTI_HEELING ? (flowMwc === '' ? undefined : Number(flowMwc)) : undefined,
+                flowPowerKw: projectType === ProjectType.ANTI_HEELING ? (flowPowerKw === '' ? undefined : Number(flowPowerKw)) : undefined,
                 files: [],
             };
             console.log('[AddProjectModal] Submitting project:', projectData);
@@ -538,6 +547,11 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                                         </select>
                                     </div>
                                 </div>
+                                {/* Flow Specification (non-AH): single text field, e.g., "600 m3/h @ 15 mwc @ 48 kW" */}
+                                <div className="md:col-span-2">
+                                    <label htmlFor="flowDescription" className={labelClass}>Flow Specification (optional)</label>
+                                    <input id="flowDescription" type="text" value={flowDescription} onChange={e => setFlowDescription(e.target.value)} placeholder="e.g., 600 m3/h @ 15 mwc @ 48 kW" className={inputClass} />
+                                </div>
                             </div>
                             <div className="flex justify-end items-center mt-2 min-h-[48px]">
                                 <span className="text-gray-500 dark:text-gray-300 italic text-lg font-semibold text-right">Total Project Value<br /><span className="text-base font-normal">To be estimated</span></span>
@@ -634,6 +648,27 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                             />
                         </div>
                     </>
+                )}
+
+                {/* Flow Specification for Anti-Heeling: capacity + mwc + power */}
+                {projectType === ProjectType.ANTI_HEELING && (
+                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <h3 className="font-semibold mb-2 text-gray-800 dark:text-gray-200">Flow Specification</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className={labelClass}>Capacity (m3/h)</label>
+                                <input type="number" min="0" value={flowCapacityM3h} onChange={e => setFlowCapacityM3h(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                            </div>
+                            <div>
+                                <label className={labelClass}>MWC</label>
+                                <input type="number" min="0" value={flowMwc} onChange={e => setFlowMwc(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Power (kW)</label>
+                                <input type="number" min="0" value={flowPowerKw} onChange={e => setFlowPowerKw(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                            </div>
+                        </div>
+                    </div>
                 )}
 
                 {projectType !== ProjectType.ANTI_HEELING && (

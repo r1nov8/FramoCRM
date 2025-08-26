@@ -5,6 +5,7 @@ import { Currency, ProjectType } from '../types';
 import { PRICING_DATA } from '../data/pricingData';
 import type { Accessory, PumpPriceData, PumpVariant } from '../data/pricingData';
 import { DollarIcon } from './icons';
+import { useData } from '../context/DataContext';
 
 // Formatting helpers
 function fmtInt(n: number): string {
@@ -153,6 +154,7 @@ const getInitialLineItems = (isAntiHeeling: boolean): LineItem[] => {
 
 export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = ({ onClose, project, companies, teamMembers, onUpdateProjectPrice }) => {
     const isAH = project.projectType === ProjectType.ANTI_HEELING;
+    const { updateProjectFields } = useData();
 
     const [lineItems, setLineItems] = useState<LineItem[]>(getInitialLineItems(!!isAH));
     const [showExtras, setShowExtras] = useState(false);
@@ -171,6 +173,11 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
         ].join('\n')
     );
     const EXTRA_DAY_RATE = 12000;
+    // Flow spec (persisted in estimator state and optionally saved to project)
+    const [flowCapacityM3h, setFlowCapacityM3h] = useState<number | ''>(() => (project.flowCapacityM3h ?? ''));
+    const [flowMwc, setFlowMwc] = useState<number | ''>(() => (project.flowMwc ?? ''));
+    const [flowPowerKw, setFlowPowerKw] = useState<number | ''>(() => (project.flowPowerKw ?? ''));
+    const [flowDescription, setFlowDescription] = useState<string>(() => project.flowDescription || '');
     const [startupLocation, setStartupLocation] = useState<string>(() => Object.keys((PRICING_DATA.antiHeeling?.startupLocations as any) || {})[0] || '');
     const startupAverage = useMemo(() => {
         const row = ((PRICING_DATA.antiHeeling?.startupLocations as any) || {})[startupLocation] || {};
@@ -225,6 +232,12 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                 shippingRegion,
                 shippingAutoMap,
                 startupLocation,
+                flow: {
+                    capacityM3h: flowCapacityM3h === '' ? null : flowCapacityM3h,
+                    mwc: flowMwc === '' ? null : flowMwc,
+                    powerKw: flowPowerKw === '' ? null : flowPowerKw,
+                    description: flowDescription || null,
+                }
             };
             localStorage.setItem(storageKey, JSON.stringify(payload));
         } catch {}
@@ -247,6 +260,13 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                 if (typeof s.shippingRegion === 'string') setShippingRegion(s.shippingRegion);
                 if (typeof s.shippingAutoMap === 'boolean') setShippingAutoMap(s.shippingAutoMap);
                 if (typeof s.startupLocation === 'string') setStartupLocation(s.startupLocation);
+                if (s.flow && typeof s.flow === 'object') {
+                    const f = s.flow as any;
+                    if (f.capacityM3h !== undefined) setFlowCapacityM3h(f.capacityM3h === null ? '' : f.capacityM3h);
+                    if (f.mwc !== undefined) setFlowMwc(f.mwc === null ? '' : f.mwc);
+                    if (f.powerKw !== undefined) setFlowPowerKw(f.powerKw === null ? '' : f.powerKw);
+                    if (typeof f.description === 'string') setFlowDescription(f.description);
+                }
             }
         } catch {}
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -660,7 +680,27 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
 
     // Use-this-price handler: save local estimator state and forward the chosen price
     const handleUseThisPrice = (amount: number, currency: Currency) => {
+        // Save estimator including flow data first
         saveEstimatorState();
+        // If flow info is present, persist it into the project so it appears in overview and quotes
+        try {
+            const patch: any = {};
+            if (isAH) {
+                // In AH, prefer numeric structured fields, but allow description too
+                if (flowCapacityM3h !== '' || flowMwc !== '' || flowPowerKw !== '') {
+                    patch.flowCapacityM3h = flowCapacityM3h === '' ? null : Number(flowCapacityM3h);
+                    patch.flowMwc = flowMwc === '' ? null : Number(flowMwc);
+                    patch.flowPowerKw = flowPowerKw === '' ? null : Number(flowPowerKw);
+                }
+                if (flowDescription && flowDescription.trim()) patch.flowDescription = flowDescription.trim();
+            } else if (flowDescription && flowDescription.trim()) {
+                patch.flowDescription = flowDescription.trim();
+            }
+            if (Object.keys(patch).length > 0) {
+                // Persist via DataContext helper (handles API base and auth)
+                updateProjectFields(project.id, patch).catch(()=>{});
+            }
+        } catch {}
         // Persist both the chosen quote price and the self cost per vessel.
         // Convert totalSelfCost (computed in NOK) into the selected project currency so GM% is correct.
         const selfCostInCurrency = (() => {
@@ -685,6 +725,45 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                     <div><span className="font-semibold">Prepared by:</span> {salesRep?.initials || 'N/A'}</div>
                     <div><span className="font-semibold">Vessel Size:</span> {project.vesselSize?.toLocaleString() || 'N/A'} {project.vesselSizeUnit}</div>
                     <div><span className="font-semibold">Fuel Type:</span> {project.fuelType}</div>
+                    {isAH && (
+                        <div>
+                            <div className="flex items-end gap-3 flex-wrap">
+                                <div>
+                                    <label className="block text-[10px] text-gray-500 dark:text-gray-400 leading-tight">Capacity (m3/h)</label>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        placeholder="600"
+                                        value={flowCapacityM3h}
+                                        onChange={e => setFlowCapacityM3h(e.target.value === '' ? '' : Number(e.target.value))}
+                                        className="w-24 px-2 py-1 text-xs bg-transparent border rounded-md dark:border-gray-600"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-gray-500 dark:text-gray-400 leading-tight">Head (mwc)</label>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        placeholder="15"
+                                        value={flowMwc}
+                                        onChange={e => setFlowMwc(e.target.value === '' ? '' : Number(e.target.value))}
+                                        className="w-20 px-2 py-1 text-xs bg-transparent border rounded-md dark:border-gray-600"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-gray-500 dark:text-gray-400 leading-tight">Power (kW)</label>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        placeholder="48"
+                                        value={flowPowerKw}
+                                        onChange={e => setFlowPowerKw(e.target.value === '' ? '' : Number(e.target.value))}
+                                        className="w-20 px-2 py-1 text-xs bg-transparent border rounded-md dark:border-gray-600"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="overflow-x-auto">

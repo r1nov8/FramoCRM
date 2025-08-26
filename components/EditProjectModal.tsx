@@ -34,6 +34,11 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
     const [designCompanyId, setDesignCompanyId] = useState('');
     const [primaryContactId, setPrimaryContactId] = useState('');
     const [notes, setNotes] = useState('');
+    // Flow spec fields
+    const [flowDescription, setFlowDescription] = useState('');
+    const [flowCapacityM3h, setFlowCapacityM3h] = useState<number | ''>('');
+    const [flowMwc, setFlowMwc] = useState<number | ''>('');
+    const [flowPowerKw, setFlowPowerKw] = useState<number | ''>('');
     const [products, setProducts] = useState<Product[]>([]);
     const [numberOfVessels, setNumberOfVessels] = useState(1);
     const [pumpsPerVessel, setPumpsPerVessel] = useState(1);
@@ -67,6 +72,10 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
             setVesselSize(project.vesselSize ?? '');
             setVesselSizeUnit(project.vesselSizeUnit ?? VesselSizeUnit.DWT);
             setFuelType(project.fuelType);
+            setFlowDescription(project.flowDescription || '');
+            setFlowCapacityM3h(typeof project.flowCapacityM3h === 'number' ? project.flowCapacityM3h : '');
+            setFlowMwc(typeof project.flowMwc === 'number' ? project.flowMwc : '');
+            setFlowPowerKw(typeof project.flowPowerKw === 'number' ? project.flowPowerKw : '');
         }
     }, [project]);
 
@@ -110,6 +119,10 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
             vesselSize: typeof vesselSize === 'number' ? vesselSize : undefined,
             vesselSizeUnit: vesselSizeUnit || undefined,
             fuelType,
+            flowDescription: isAH ? undefined : (flowDescription || undefined),
+            flowCapacityM3h: isAH ? (flowCapacityM3h === '' ? undefined : Number(flowCapacityM3h)) : undefined,
+            flowMwc: isAH ? (flowMwc === '' ? undefined : Number(flowMwc)) : undefined,
+            flowPowerKw: isAH ? (flowPowerKw === '' ? undefined : Number(flowPowerKw)) : undefined,
             // Recalculate value in case number of vessels changed
             value: (project.pricePerVessel || 0) * numberOfVessels,
         });
@@ -302,6 +315,31 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ onClose, onU
                         <input type="date" id="closingDate" value={closingDate} onChange={e => setClosingDate(e.target.value)} className={inputClass} />
                     </div>
                 </div>
+                {/* Flow Specification */}
+                {isAH ? (
+                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                        <h3 className="font-semibold mb-2 text-gray-800 dark:text-gray-200">Flow Specification</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className={labelClass}>Capacity (m3/h)</label>
+                                <input type="number" min="0" value={flowCapacityM3h} onChange={e => setFlowCapacityM3h(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                            </div>
+                            <div>
+                                <label className={labelClass}>MWC</label>
+                                <input type="number" min="0" value={flowMwc} onChange={e => setFlowMwc(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Power (kW)</label>
+                                <input type="number" min="0" value={flowPowerKw} onChange={e => setFlowPowerKw(e.target.value === '' ? '' : Number(e.target.value))} className={inputClass} />
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div>
+                        <label htmlFor="flowDescription" className={labelClass}>Flow Specification (optional)</label>
+                        <input id="flowDescription" type="text" value={flowDescription} onChange={e => setFlowDescription(e.target.value)} placeholder="e.g., 600 m3/h @ 15 mwc @ 48 kW" className={inputClass} />
+                    </div>
+                )}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {stagesForGrossMargin.includes(stage) && (
                         <div>

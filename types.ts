@@ -161,5 +161,10 @@ export interface Project {
     vesselSize?: number;
     vesselSizeUnit?: VesselSizeUnit;
     fuelType: FuelType;
+    // Optional flow spec fields used in quotes
+    flowDescription?: string;
+    flowCapacityM3h?: number;
+    flowMwc?: number;
+    flowPowerKw?: number;
     files: ProjectFile[];
 }
