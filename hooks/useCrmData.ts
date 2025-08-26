@@ -23,7 +23,8 @@ function resolveApiBase(): string {
     } catch {}
 
     // Render heuristic: if served from *.onrender.com and env var isn't provided,
-    // try deriving the backend host by swapping "-frontend" -> "-backend".
+    // try deriving the backend host by swapping "-frontend" -> "-backend",
+    // or stripping a trailing numeric suffix (e.g., framocrm-1 -> framocrm).
     try {
         if (typeof window !== 'undefined') {
             const host = window.location.hostname;
@@ -31,6 +32,9 @@ function resolveApiBase(): string {
                 const sub = host.split('.')[0];
                 if (/-frontend$/i.test(sub)) {
                     const backendHost = sub.replace(/-frontend$/i, '-backend') + '.onrender.com';
+                    return `https://${backendHost}`;
+                } else if (/-\d+$/i.test(sub)) {
+                    const backendHost = sub.replace(/-\d+$/i, '') + '.onrender.com';
                     return `https://${backendHost}`;
                 }
             }
