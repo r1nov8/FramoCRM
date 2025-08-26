@@ -22,6 +22,21 @@ function resolveApiBase(): string {
         }
     } catch {}
 
+    // Render heuristic: if served from *.onrender.com and env var isn't provided,
+    // try deriving the backend host by swapping "-frontend" -> "-backend".
+    try {
+        if (typeof window !== 'undefined') {
+            const host = window.location.hostname;
+            if (/\.onrender\.com$/i.test(host)) {
+                const sub = host.split('.')[0];
+                if (/-frontend$/i.test(sub)) {
+                    const backendHost = sub.replace(/-frontend$/i, '-backend') + '.onrender.com';
+                    return `https://${backendHost}`;
+                }
+            }
+        }
+    } catch {}
+
     // LocalStorage override (useful in local/dev without VITE_API_URL)
     try {
         if (typeof localStorage !== 'undefined') {
