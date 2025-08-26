@@ -50,21 +50,30 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS
       'http://127.0.0.1:5174'
     ]);
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps, curl, etc.)
+    // allow requests with no origin (like curl) and server-to-server
     if (!origin) return callback(null, true);
-  const okList = allowedOrigins.includes(origin);
-  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\\d+)?$/i.test(origin || '');
+    const okList = allowedOrigins.includes(origin);
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\\d+)?$/i.test(origin || '');
     const allowOnrender = process.env.ALLOW_ONRENDER === 'true';
-    const isOnRender = /\.onrender\.com$/i.test((origin || '').replace(/^https?:\/\//, '').split('/')[0] || '');
-  if (okList || isLocalhost || (allowOnrender && isOnRender)) {
+    const host = (origin || '').replace(/^https?:\/\//, '').split('/')[0] || '';
+    const isOnRender = /\.onrender\.com$/i.test(host);
+    if (okList || isLocalhost || (allowOnrender && isOnRender)) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'), false);
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','Accept','Origin'],
+  optionsSuccessStatus: 204,
+  preflightContinue: false,
+};
+
+app.use(cors(corsOptions));
+// Ensure preflight requests are answered with the proper headers
+app.options('*', cors(corsOptions));
 // Increase payload limit to support larger CSV uploads wrapped in JSON
 app.use(express.json({ limit: '25mb' }));
 // Force JSON content type for API responses by default
