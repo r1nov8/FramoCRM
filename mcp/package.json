@@ -12,10 +12,11 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.3",
     "dotenv": "^16.4.5",
-  "pg": "^8.11.5",
-  "undici": "^6.20.1"
+    "pg": "^8.11.5",
+    "undici": "^6.20.1"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.5",
     "ts-node": "^10.9.2",
     "typescript": "~5.8.2"
   }

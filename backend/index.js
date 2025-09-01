@@ -190,6 +190,141 @@ function isTextExtension(filePath) {
   return textExts.has(ext);
 }
 
+// --- Quote helpers ---
+function coalesce(val, def) { return val !== undefined && val !== null && val !== '' ? val : def; }
+function toNum(n) { const v = Number(n); return Number.isFinite(v) ? v : undefined; }
+function get(obj, path) {
+  if (!obj) return undefined;
+  if (Array.isArray(path)) {
+    for (const p of path) {
+      const v = get(obj, p);
+      if (v !== undefined && v !== null && v !== '') return v;
+    }
+    return undefined;
+  }
+  const parts = String(path).split('.');
+  let cur = obj;
+  for (const key of parts) {
+    if (cur && Object.prototype.hasOwnProperty.call(cur, key)) cur = cur[key]; else return undefined;
+  }
+  return cur;
+}
+
+function buildQuoteItems(proj, estData) {
+  // 1) If estimator already produced a product/line-item style array, trust it
+  const fromArrays = get(estData, ['items', 'lineItems', 'products', 'quoteItems']);
+  if (Array.isArray(fromArrays) && fromArrays.length) {
+    // Detect form-skeleton items like "Pump Type", "Manometer", etc. If mostly generic, ignore and build curated items.
+    const genericLabels = new Set([
+      'pump type','manometer','motor type','starter','starter addition','pneum. valve','electric valve',
+      'level switch','measurement','control unit / panel','screen size, addition','valve extra','other equipment'
+    ]);
+    let genericCount = 0;
+    for (const it of fromArrays) {
+      const n = (it && (it.name || it.title || it.type)) ? String(it.name || it.title || it.type).toLowerCase().trim() : '';
+      if (genericLabels.has(n)) genericCount++;
+    }
+    const genericRate = genericCount / fromArrays.length;
+    if (genericRate < 0.5) {
+      const mapped = [];
+      for (const it of fromArrays) {
+        if (!it) continue;
+        const qty = toNum(it.qty ?? it.quantity ?? it.count) ?? 1;
+        const unit = it.unit || 'of';
+        // Prefer explicit description; else synthesize from name + details
+        const desc = coalesce(
+          it.description,
+          [it.name, it.title, it.type, it.model, it.details, it.spec]
+            .filter(x => x && String(x).trim()).map(String).join(' - ')
+        );
+        if (!desc) continue;
+        mapped.push({ kind: it.kind || it.type || null, qty, unit, description: String(desc) });
+      }
+      if (mapped.length) return mapped;
+      // else fall through to curated build
+    }
+    // If mostly generic, ignore and continue to curated items below
+  }
+
+  const items = [];
+  const pumpQty = coalesce(toNum(estData.pumpQuantity), proj.pumps_per_vessel || 1);
+  // Try nested pump object first
+  const pumpType = coalesce(
+    get(estData, ['pump.type', 'pump.model']) || estData.pumpType || estData.pump_model || estData.pumpModel,
+    'RBP-250 inline reversible single stage propeller pump'
+  );
+  const cap = coalesce(toNum(estData.capacity_m3h), proj.flow_capacity_m3h);
+  const head = coalesce(toNum(estData.head_mwc), proj.flow_mwc);
+  const power = coalesce(toNum(estData.power_kw), proj.flow_power_kw);
+  const ex = Boolean(estData.ex ?? get(estData, 'motor.ex')) || String(estData.motorRating || '').toUpperCase().includes('EX');
+  const motorType = coalesce(estData.motorType ?? get(estData,'motor.type'), ex ? 'Ex motor' : 'IE3');
+  const ipPart = ex ? 'Ex-rated motor' : 'IP55';
+  const grid = coalesce(estData.supply || estData.power_requirements || get(estData,'power.supply'), '440V/60Hz/3ph');
+  const motorPower = coalesce(toNum(estData.motor_power_kw ?? get(estData,'motor.kw')), power);
+  const capStr = [cap != null ? `${cap} m3/h` : null, head != null ? `${head} mwc` : null, power != null ? `${power} kW` : null].filter(Boolean).join(' @ ');
+  const flangeVal = coalesce(get(estData, ['flangeType','pump.flange','flange']), '');
+  const flange = flangeVal ? `, flange ${flangeVal}` : '';
+  const manometer = (estData.manometer === true || get(estData,'pump.manometer') === true) ? ', with manometer' : '';
+  const pumpDesc = `${pumpType}, capacity ${capStr || 'n/a'}, ${ipPart} el. motor${motorPower!=null?` rating ${motorPower} kW`:''} (${motorType}) at ${grid}${flange}${manometer}. Thermistor and space-heater included.`;
+  if (pumpQty && pumpQty > 0) items.push({ kind: 'pump', qty: pumpQty, unit: 'of', description: pumpDesc, capacity: cap, head });
+
+  const csQty = toNum(estData.controlSystemQty ?? get(estData,'control.qty')) ?? 1;
+  if (csQty > 0) {
+    const csMode = coalesce(get(estData,['control.mode','controlSystemMode']), 'Automatically or manually operated');
+    const csScreen = coalesce(get(estData,['control.screen','controlSystemScreen']), '7” touch screen');
+    const csMount = coalesce(get(estData,['control.mount','controlSystemMount']), 'desk or cabinet-wall mounted');
+    const csIface = coalesce(get(estData,['control.interface','controlSystemInterface']), 'ModBus RS485 for interface to vessel IAS');
+    const csDesc = `${csMode} control system (MCU) with ${csScreen}, ${csMount}. ${csIface}.`;
+    items.push({ kind: 'control_system', qty: csQty, unit: 'of', description: csDesc });
+  }
+
+  const starterQty = toNum(estData.starterQty) ?? (pumpQty || 0);
+  if (starterQty > 0) {
+    const stDesc = 'DOL starter for the el. motor with ammeter, running-hour and emergency stop.';
+    items.push({ kind: 'starter', qty: starterQty, unit: 'of', description: stDesc });
+  }
+
+  const valveQty = toNum(get(estData,['valves.qty','valveQty']));
+  const valveDN = coalesce(get(estData,['valves.dn','valveDN']), 'DN400');
+  const valveType = coalesce(get(estData,['valves.type','valveType']), 'LUG');
+  const airFilter = (get(estData,['valves.airDryFilter','valveAirDryFilter']) ?? true) ? ' with air dry filter' : '';
+  if (valveQty && valveQty > 0) {
+    const vDesc = `Pneumatically butterfly valve ${valveDN} ${valveType}.\n1-of single + 1-of double acting${airFilter}.`;
+    items.push({ kind: 'valve', qty: valveQty, unit: 'of', description: vDesc });
+  }
+
+  const levelSwitchQty = toNum(estData.levelSwitchQty);
+  if (levelSwitchQty && levelSwitchQty > 0) items.push({ kind: 'level_switch', qty: levelSwitchQty, unit: 'of', description: 'Level switch for high/low level alarm in tanks' });
+
+  const includeTools = estData.toolsSet === true || estData.includeTools === true;
+  if (includeTools) items.push({ kind: 'tools_set', qty: 1, unit: 'set', description: 'Tools, service manuals and class required certificates.' });
+
+  const supportPersons = toNum(estData.startupSupportPersons) ?? 1;
+  const supportDays = toNum(estData.startupSupportDays) ?? null;
+  const includeSupport = estData.startupSupport === true || supportDays != null;
+  if (includeSupport) items.push({ kind: 'startup_support', qty: 1, unit: 'of', description: `Assistance at start-up commissioning of the system, ${supportPersons}-man${supportDays!=null?`, ${supportDays}-working days`:''}.` });
+
+  return items;
+}
+
+function normalizeDirectItems(items) {
+  if (!Array.isArray(items)) return [];
+  const out = [];
+  for (const it of items) {
+    if (!it) continue;
+    const qty = toNum(it.qty ?? it.quantity ?? it.count) ?? 1;
+    const unit = (it.unit && String(it.unit).trim()) || 'of';
+    const desc = coalesce(
+      it.description,
+      [it.name, it.title, it.type, it.model, it.details, it.spec]
+        .filter(x => x && String(x).trim()).map(String).join(' - ')
+    );
+    if (!desc) continue;
+    out.push({ kind: it.kind || it.type || null, qty, unit, description: String(desc) });
+  }
+  return out;
+}
+
 async function listDirectory(dir) {
   const entries = await fsp.readdir(dir, { withFileTypes: true });
   const result = [];
@@ -1224,6 +1359,53 @@ app.get('/api/projects/:id/estimates', async (req, res) => {
   }
 });
 
+// Preview the computed quote context (items and template data)
+app.get('/api/projects/:id/quote-preview', async (req, res) => {
+  try {
+    const pid = coerceProjectId(req.params.id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
+    const type = (req.query.type && String(req.query.type)) || 'anti_heeling';
+    const pr = await pool.query('SELECT * FROM projects WHERE id = $1', [pid]);
+    const proj = pr.rows[0];
+    if (!proj) return res.status(404).json({ error: 'Project not found' });
+    const est = await pool.query('SELECT * FROM project_estimates WHERE project_id = $1 AND type = $2', [pid, type]);
+    if (!est.rows.length) return res.status(404).json({ error: 'Estimate not found' });
+    const estData = est.rows[0].data || {};
+    let items = [];
+    if (Array.isArray(req.body?.items)) {
+      items = normalizeDirectItems(req.body.items);
+    }
+    if (!items.length) items = buildQuoteItems(proj, estData);
+    const now = new Date();
+    const ymd = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const currency = proj.currency || 'USD';
+    const pricePerVessel = proj.price_per_vessel != null ? Number(proj.price_per_vessel) : 0;
+    const numberOfVessels = proj.number_of_vessels != null ? Number(proj.number_of_vessels) : 1;
+    const total = pricePerVessel * numberOfVessels;
+    const scope_of_supply = items.map((it,i)=>`${i+1}  ${it.qty} ${it.unit || 'of'}  ${it.description}`).join('\n');
+    res.json({
+      project: { id: String(proj.id), name: proj.name, opportunity_number: proj.opportunity_number },
+      estimateType: type,
+      estData,
+      items,
+      templateData: {
+        date: ymd,
+        project_no: proj.opportunity_number || '',
+        project_name: proj.name || '',
+        scope_of_supply,
+        items,
+        currency,
+        base_price: pricePerVessel,
+        number_of_vessels: numberOfVessels,
+        total_price: total,
+      }
+    });
+  } catch (err) {
+    console.error('Quote preview error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Save (upsert) estimate for a project
 app.post('/api/projects/:id/estimates', requireAuth, async (req, res) => {
   try {
@@ -1252,6 +1434,47 @@ app.post('/api/projects/:id/estimates', requireAuth, async (req, res) => {
     res.status(201).json(estimateRowToApi(rows[0]));
   } catch (err) {
     console.error('Save estimate error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Save explicit quote items and optionally sync to line items
+app.post('/api/projects/:id/quote-items', requireAuth, async (req, res) => {
+  try {
+    const pid = coerceProjectId(req.params.id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
+    const type = (req.body && req.body.type) || 'anti_heeling';
+    const items = normalizeDirectItems(req.body?.items || []);
+    const syncLineItems = req.body?.syncLineItems !== false; // default true
+    if (!items.length) return res.status(400).json({ error: 'No items provided' });
+
+    // Upsert into project_estimates.data.quoteItems
+    const pr = await pool.query(
+      `INSERT INTO project_estimates (project_id, type, data)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (project_id, type)
+       DO UPDATE SET data = project_estimates.data || jsonb_build_object('quoteItems', $3->'quoteItems'), updated_at = NOW()
+       RETURNING *`,
+      [pid, type, { quoteItems: items }]
+    );
+
+    if (syncLineItems) {
+      try {
+        await pool.query(`DELETE FROM project_line_items WHERE project_id = $1 AND notes LIKE 'MANUAL:%'`, [pid]);
+        for (const it of items) {
+          await pool.query(
+            'INSERT INTO project_line_items (project_id, legacy_type, quantity, notes) VALUES ($1, $2, $3, $4)',
+            [pid, it.kind || null, it.qty, 'MANUAL: ' + it.description]
+          );
+        }
+      } catch (e) {
+        console.warn('Warning: syncing manual line items failed:', e?.message || e);
+      }
+    }
+
+    res.status(201).json({ ok: true, items });
+  } catch (err) {
+    console.error('Save quote-items error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1294,75 +1517,13 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
 
     // Build quote items from estimate data (pump + common components)
     const estDataSafe = est.rows[0].data || {};
-    const items = [];
-    // Pump item
-    const pumpQty = pick(num(estDataSafe.pumpQuantity), proj.pumps_per_vessel || 1);
-    const pumpType = pick(estDataSafe.pumpType, 'RBP-250 inline reversible single stage propeller pump');
-    const cap = pick(num(estDataSafe.capacity_m3h), proj.flow_capacity_m3h);
-    const head = pick(num(estDataSafe.head_mwc), proj.flow_mwc);
-    const power = pick(num(estDataSafe.power_kw), proj.flow_power_kw);
-    const ex = Boolean(estDataSafe.ex) || String(estDataSafe.motorRating || '').toUpperCase().includes('EX');
-    const motorType = pick(estDataSafe.motorType, ex ? 'Ex motor' : 'IE3');
-    const ipPart = ex ? 'Ex-rated motor' : 'IP55';
-    const grid = pick(estDataSafe.supply, '440V/60Hz/3ph');
-    const motorPower = pick(num(estDataSafe.motor_power_kw), power);
-    const capStr = [cap != null ? `${cap} m3/h` : null, head != null ? `${head} mwc` : null, power != null ? `${power} kW` : null]
-      .filter(Boolean).join(' @ ');
-    const pumpDesc = `${pumpType}, capacity ${capStr || 'n/a'}, ${ipPart} el. motor${motorPower!=null?` rating ${motorPower} kW`:''} (${motorType}) at ${grid}. Thermistor and space-heater included.`;
-    if (pumpQty && pumpQty > 0) {
-      items.push({ kind: 'pump', qty: pumpQty, unit: 'of', description: pumpDesc, capacity: cap, head });
+    // Allow direct items override via request body
+    let items = [];
+    if (Array.isArray(req.body?.items)) {
+      items = normalizeDirectItems(req.body.items);
     }
-
-    // Control system (MCU)
-    const csQty = num(estDataSafe.controlSystemQty) ?? 1;
-    if (csQty > 0) {
-      const csMode = pick(estDataSafe.controlSystemMode, 'Automatically or manually operated');
-      const csScreen = pick(estDataSafe.controlSystemScreen, '7” touch screen');
-      const csMount = pick(estDataSafe.controlSystemMount, 'desk or cabinet-wall mounted');
-      const csIface = pick(estDataSafe.controlSystemInterface, 'ModBus RS485 for interface to vessel IAS');
-      const csDesc = `${csMode} control system (MCU) with ${csScreen}, ${csMount}. ${csIface}.`;
-      items.push({ kind: 'control_system', qty: csQty, unit: 'of', description: csDesc });
-    }
-
-    // DOL starters
-    const starterQty = num(estDataSafe.starterQty) ?? (pumpQty || 0);
-    if (starterQty > 0) {
-      const stDesc = 'DOL starter for the el. motor with ammeter, running-hour and emergency stop.';
-      items.push({ kind: 'starter', qty: starterQty, unit: 'of', description: stDesc });
-    }
-
-    // Butterfly valves
-    const valveQty = num(estDataSafe.valveQty);
-    const valveDN = pick(estDataSafe.valveDN, 'DN400');
-    const valveType = pick(estDataSafe.valveType, 'LUG');
-    const singleAct = num(estDataSafe.valveSingleActingQty) ?? 1;
-    const doubleAct = num(estDataSafe.valveDoubleActingQty) ?? 1;
-    const airFilter = (estDataSafe.valveAirDryFilter ?? true) ? ' with air dry filter' : '';
-    if (valveQty && valveQty > 0) {
-      const vDesc = `Pneumatically butterfly valve ${valveDN} ${valveType}.\n1-of single + 1-of double acting${airFilter}.`;
-      items.push({ kind: 'valve', qty: valveQty, unit: 'of', description: vDesc });
-    }
-
-    // Level switches
-    const levelSwitchQty = num(estDataSafe.levelSwitchQty);
-    if (levelSwitchQty && levelSwitchQty > 0) {
-      const lsDesc = 'Level switch for high/low level alarm in tanks';
-      items.push({ kind: 'level_switch', qty: levelSwitchQty, unit: 'of', description: lsDesc });
-    }
-
-    // Tools, manuals, certificates (set)
-    const includeTools = estDataSafe.toolsSet === true || estDataSafe.includeTools === true;
-    if (includeTools) {
-      items.push({ kind: 'tools_set', qty: 1, unit: 'set', description: 'Tools, service manuals and class required certificates.' });
-    }
-
-    // Startup assistance
-    const supportPersons = num(estDataSafe.startupSupportPersons) ?? 1;
-    const supportDays = num(estDataSafe.startupSupportDays) ?? null;
-    const includeSupport = estDataSafe.startupSupport === true || supportDays != null;
-    if (includeSupport) {
-      const daysTxt = supportDays != null ? `, ${supportDays}-working days` : '';
-      items.push({ kind: 'startup_support', qty: 1, unit: 'of', description: `Assistance at start-up commissioning of the system, ${supportPersons}-man${daysTxt}.` });
+    if (!items.length) {
+      items = buildQuoteItems(proj, estDataSafe);
     }
 
     // TODO: extend with valves, controls, pipes, etc., based on estDataSafe

@@ -10,7 +10,7 @@ export interface ActivitySlideOverProps {
 }
 
 export const ActivitySlideOver: React.FC<ActivitySlideOverProps> = ({ open, onClose, projectId, activities }) => {
-  const { teamMembers, selectedProjectId, handleAddActivity, reloadActivitiesForProject } = useData();
+  const { teamMembers, selectedProjectId, handleAddActivity, reloadActivitiesForProject, markProjectActivitiesRead, reloadUnreadSummary } = useData();
   const [text, setText] = useState('');
   const currentUsername = useMemo(() => {
     try {
@@ -81,9 +81,21 @@ export const ActivitySlideOver: React.FC<ActivitySlideOverProps> = ({ open, onCl
         <div className="h-full flex flex-col">
           <div className="px-4 py-3 border-b dark:border-gray-800 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Activity</h2>
-            <button onClick={onClose} className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close activity">
+            <div className="flex items-center gap-2">
+              {open && (projectId || selectedProjectId) && (
+                <button
+                  onClick={async ()=>{
+                    const pid = String(projectId || selectedProjectId || '');
+                    if (!pid) return;
+                    try { await markProjectActivitiesRead(pid); await reloadActivitiesForProject(pid); await reloadUnreadSummary(); } catch {}
+                  }}
+                  className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
+                >Mark all read</button>
+              )}
+              <button onClick={onClose} className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close activity">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
             </button>
+            </div>
           </div>
           <div className="p-3 overflow-y-auto flex-1 pb-24">
             <div className="space-y-5">

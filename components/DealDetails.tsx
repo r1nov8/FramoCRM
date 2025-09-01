@@ -64,7 +64,9 @@ const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectSt
 
 export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator, isActive = false, onOpenActivity }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity, saveProjectEstimate, generateProjectQuote, updateProjectFields } = useData();
+    const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity, saveProjectEstimate, generateProjectQuote, updateProjectFields, projectMembersByProject, addProjectMember, removeProjectMember } = useData();
+    const projectMembers = projectMembersByProject?.[project.id] || [];
+    const [newMemberId, setNewMemberId] = useState<string>('');
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [taskFilter, setTaskFilter] = useState<'all' | 'open' | 'done' | 'overdue' | 'dueSoon'>('all');
     // Activity panel managed at App level
@@ -73,7 +75,10 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
         companies.find(c => String(c.id) === String(id)) ||
         INITIAL_COMPANIES.find(c => String(c.id) === String(id));
     const findContact = (id: string) => contacts.find(c => c.id === id);
-    const salesRep = project.salesRepId ? teamMembers.find(tm => tm.id === project.salesRepId) : undefined;
+    const salesRep = project.salesRepId
+        ? (dataTeamMembers.find(tm => String(tm.id) === String(project.salesRepId))
+            || teamMembers.find(tm => String(tm.id) === String(project.salesRepId)))
+        : undefined;
 
     const shipyard = findCompany(project.shipyardId);
     const vesselOwner = project.vesselOwnerId ? findCompany(project.vesselOwnerId) : undefined;
@@ -170,13 +175,50 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
         }
     };
 
-    const handleFileDownload = (file: ProjectFile) => {
-        const link = document.createElement('a');
-        link.href = `data:${file.type};base64,${file.content}`;
-        link.download = file.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    const handleFileDownload = async (file: ProjectFile) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${window.location.origin}/api/project-files/${file.id}/download`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            // If the app is fronted by a different origin backend, fall back to API_URL
+            if (!res.ok && (window as any).API_URL) {
+                const res2 = await fetch(`${(window as any).API_URL}/api/project-files/${file.id}/download`, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+                if (!res2.ok) throw new Error('Download failed');
+                const blob = await res2.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                return;
+            }
+            if (!res.ok) throw new Error('Download failed');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e: any) {
+            // Fallback to base64 if available in state
+            try {
+                const link = document.createElement('a');
+                link.href = `data:${file.type};base64,${file.content}`;
+                link.download = file.name;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch {}
+        }
     };
     
     const isPriceEstimated = project.pricePerVessel !== undefined && project.pricePerVessel > 0;
@@ -267,9 +309,11 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                 <div className="lg:col-span-2 flex flex-col gap-6">
-                     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                         <h2 className="text-xl font-semibold mb-4">Products & Specifications</h2>
-                        <div className="space-y-4">
+                        <div className="space-y-3">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">System Type</div>
+                            <div className="font-semibold text-gray-800 dark:text-gray-200 mb-3">{project.projectType || '—'}</div>
                             {project.products.map((product, index) => (
                                 <ProductInfo key={index} product={product} />
                             ))}
@@ -510,6 +554,55 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                         </div>
                     </div>
 
+                    {/* Team Assignment */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold">Project Team</h2>
+                            <div className="flex items-center gap-2">
+                                <select
+                                    className="px-2 py-1 text-sm rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                    value={newMemberId}
+                                    onChange={(e)=> setNewMemberId(e.target.value)}
+                                >
+                                    <option value="">Add member…</option>
+                                    {dataTeamMembers.filter(m => !projectMembers.find(pm => pm.id === m.id)).map(m => (
+                                        <option key={m.id} value={m.id}>{m.initials} - {m.first_name} {m.last_name}</option>
+                                    ))}
+                                </select>
+                                <button
+                                    className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white disabled:opacity-50"
+                                    disabled={!newMemberId}
+                                    onClick={async()=>{
+                                        if (!newMemberId) return;
+                                        try { await addProjectMember(project.id, newMemberId); setNewMemberId(''); } catch (e:any) { alert(e?.message || 'Failed to add'); }
+                                    }}
+                                >
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                        <ul className="space-y-2">
+                            {projectMembers.length === 0 && <li className="text-sm text-gray-500">No members assigned.</li>}
+                            {projectMembers.map(m => (
+                                <li key={m.id} className="flex items-center justify-between p-2 rounded border dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">{m.initials}</div>
+                                        <div>
+                                            <div className="text-sm font-medium">{m.first_name} {m.last_name}</div>
+                                            {m.jobTitle && <div className="text-xs text-gray-500">{m.jobTitle}</div>}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={async()=>{ try { await removeProjectMember(project.id, m.id); } catch (e:any) { alert(e?.message || 'Failed to remove'); } }}
+                                        className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                    >
+                                        Remove
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
                      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                         <h2 className="text-xl font-semibold mb-4 flex items-center"><PencilIcon className="w-6 h-6 mr-2 text-gray-500" /> Notes</h2>
                         <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{project.notes}</p>
@@ -581,8 +674,14 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                              <ContactCard contact={primaryContact} company={findCompany(primaryContact.companyId)} />
                         </div>
                     )}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                         <h2 className="text-xl font-semibold mb-4">Involved Companies</h2>
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                                                 <div className="flex items-center justify-between mb-4">
+                                                     <h2 className="text-xl font-semibold">Involved Companies</h2>
+                                                     <button
+                                                         onClick={() => onOpenActivity(project.id)}
+                                                         className="px-3 py-1.5 text-sm rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                                     >Activity</button>
+                                                 </div>
                          <div className="space-y-4">
                             {shipyard && <CompanyCard company={shipyard} />}
                             {vesselOwner && <CompanyCard company={vesselOwner} />}

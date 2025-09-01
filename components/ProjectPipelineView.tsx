@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ProjectListSidebar } from './Sidebar';
 import { ProjectDetails } from './DealDetails';
 import type { Project, Company, Contact, TeamMember } from '../types';
-import { ProjectType } from '../types';
+import { ProjectType, ProjectStage, CompanyType } from '../types';
 
 interface ProjectPipelineViewProps {
     projects: Project[];
@@ -47,16 +47,79 @@ export const ProjectPipelineView: React.FC<ProjectPipelineViewProps> = ({
         }
     }, [selectedProjectId, projects]);
 
+    // --- Filters ---
+    const [filterStage, setFilterStage] = useState<string>('');
+    const [filterShipyardId, setFilterShipyardId] = useState<string>('');
+    const [filterOwnerId, setFilterOwnerId] = useState<string>('');
+
+    const shipyards = useMemo(() => companies.filter(c => c.type === CompanyType.SHIPYARD), [companies]);
+    const owners = useMemo(() => companies.filter(c => c.type === CompanyType.VESSEL_OWNER), [companies]);
+
+    const filteredProjects = useMemo(() => {
+        let list = projects;
+        if (filterStage) list = list.filter(p => p.stage === (filterStage as ProjectStage));
+        if (filterShipyardId) list = list.filter(p => String(p.shipyardId) === String(filterShipyardId));
+        if (filterOwnerId) list = list.filter(p => String(p.vesselOwnerId || '') === String(filterOwnerId));
+        return list;
+    }, [projects, filterStage, filterShipyardId, filterOwnerId]);
+
     return (
         <div className="flex flex-1 h-full min-h-0 items-stretch">
             <ProjectListSidebar
-                projects={projects}
+                projects={filteredProjects}
                 teamMembers={teamMembers}
                 selectedProjectId={selectedProjectId}
                 onSelectProject={onSelectProject}
                 onAddProjectClick={onAddProjectClick}
             />
             <main className="flex-1 px-6 pb-6 pt-0 overflow-y-auto">
+                {/* Filters */}
+                <div className="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur py-3 -mx-6 px-6 border-b dark:border-gray-800">
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Stage</label>
+                            <select className="px-2 py-1 text-sm rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                value={filterStage}
+                                onChange={(e)=> setFilterStage(e.target.value)}
+                            >
+                                <option value="">All</option>
+                                {Object.values(ProjectStage).map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Shipyard</label>
+                            <select className="px-2 py-1 text-sm rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                value={filterShipyardId}
+                                onChange={(e)=> setFilterShipyardId(e.target.value)}
+                            >
+                                <option value="">All</option>
+                                {shipyards.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Owner</label>
+                            <select className="px-2 py-1 text-sm rounded border dark:border-gray-700 bg-white dark:bg-gray-900"
+                                value={filterOwnerId}
+                                onChange={(e)=> setFilterOwnerId(e.target.value)}
+                            >
+                                <option value="">All</option>
+                                {owners.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <button
+                            className="ml-auto px-3 py-1.5 text-sm rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
+                            onClick={()=>{ setFilterStage(''); setFilterShipyardId(''); setFilterOwnerId(''); }}
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
                 {selectedProject ? (
                     <ProjectDetails
                         project={selectedProject}

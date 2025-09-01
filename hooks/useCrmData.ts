@@ -54,8 +54,13 @@ function resolveApiBase(): string {
 }
 
 export const API_URL = resolveApiBase();
-// Log resolved API base once for debugging production routing
-try { if (typeof window !== 'undefined') console.info('[CRM] API_URL =', API_URL); } catch {}
+// Log resolved API base once for debugging production routing and expose globally for non-hook modules
+try {
+    if (typeof window !== 'undefined') {
+        (window as any).API_URL = API_URL;
+        console.info('[CRM] API_URL =', API_URL);
+    }
+} catch {}
 const MOCK = (() => {
     const v = String((import.meta as any)?.env?.VITE_MOCK_MODE ?? '').toLowerCase().trim();
     return v === '1' || v === 'true' || v === 'yes';
@@ -94,6 +99,7 @@ export const useCrmData = () => {
     const [tasksByProject, setTasksByProject] = useState<Record<string, Task[]>>({});
     const [activitiesByProject, setActivitiesByProject] = useState<Record<string, Activity[]>>({});
     const [unreadSummary, setUnreadSummary] = useState<{ entries: { projectId: string; count: number }[]; total: number }>({ entries: [], total: 0 });
+    const [projectMembersByProject, setProjectMembersByProject] = useState<Record<string, TeamMember[]>>({});
 
     useEffect(() => saveToLocalStorage('crm_projects', projects), [projects]);
     const authHeaders = () => {
@@ -143,6 +149,25 @@ export const useCrmData = () => {
             setActivitiesByProject(prev => ({ ...prev, [projectId]: Array.isArray(data) ? data : [] }));
         } catch (err) {
             console.error('Failed to fetch activities:', err);
+        }
+    };
+
+    const fetchProjectMembers = async (projectId: string) => {
+        if (MOCK) { return; }
+        try {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}/members`, { headers: { ...authHeaders() } });
+            if (!res.ok) throw new Error('Failed to fetch project members');
+            const data = await res.json();
+            const list: TeamMember[] = Array.isArray(data) ? data.map((m: any) => ({
+                id: String(m.id),
+                first_name: m.first_name ?? m.firstName ?? '',
+                last_name: m.last_name ?? m.lastName ?? '',
+                initials: m.initials || `${(m.first_name||m.firstName||'').charAt(0)}${(m.last_name||m.lastName||'').charAt(0)}`.toUpperCase(),
+                jobTitle: m.jobTitle ?? m.job_title ?? ''
+            })) : [];
+            setProjectMembersByProject(prev => ({ ...prev, [projectId]: list }));
+        } catch (err) {
+            console.error('Failed to fetch project members:', err);
         }
     };
 
@@ -298,7 +323,8 @@ export const useCrmData = () => {
     // Load tasks when project selection changes
     useEffect(() => {
         if (selectedProjectId) fetchTasksForProject(selectedProjectId);
-    if (selectedProjectId) fetchActivitiesForProject(selectedProjectId);
+        if (selectedProjectId) fetchActivitiesForProject(selectedProjectId);
+        if (selectedProjectId) fetchProjectMembers(selectedProjectId);
     }, [selectedProjectId]);
 
     // Lightweight polling for unread summary while app is visible and user is authed
@@ -674,15 +700,16 @@ export const useCrmData = () => {
     };
 
 
-    const handleDeleteFile = (projectId: string, fileId: string) => {
-        setProjects(prevProjects =>
-            prevProjects.map(p => {
-                if (p.id === projectId) {
-                    return { ...p, files: p.files.filter(f => f.id !== fileId) };
-                }
-                return p;
-            })
-        );
+    const handleDeleteFile = async (projectId: string, fileId: string) => {
+        // Optimistic removal
+        setProjects(prev => prev.map(p => p.id === projectId ? { ...p, files: (p.files || []).filter(f => String(f.id) !== String(fileId)) } : p));
+        if (MOCK) return;
+        try {
+            const res = await fetch(`${API_URL}/api/project-files/${fileId}`, { method: 'DELETE', headers: { ...authHeaders() } });
+            if (!res.ok && res.status !== 204) throw new Error('Failed to delete file');
+        } catch (err) {
+            console.error('Delete file error:', err);
+        }
     };
     
     const handleUpdateProjectPrice = async (projectId: string, price: number, currency: Currency, selfCostPerVessel?: number) => {
@@ -857,11 +884,43 @@ export const useCrmData = () => {
         return file;
     };
 
+    const addProjectMember = async (projectId: string, teamMemberId: string, role?: string) => {
+        if (MOCK) { return; }
+        try {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}/members`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ teamMemberId: Number(teamMemberId), role: role || null })
+            });
+            if (!res.ok) throw new Error('Failed to add member');
+            await fetchProjectMembers(projectId);
+            try { await fetchActivitiesForProject(projectId); } catch {}
+        } catch (err) {
+            console.error('Failed to add member:', err);
+        }
+    };
+
+    const removeProjectMember = async (projectId: string, teamMemberId: string) => {
+        if (MOCK) { return; }
+        try {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}/members/${teamMemberId}`, {
+                method: 'DELETE',
+                headers: { ...authHeaders() }
+            });
+            if (!res.ok && res.status !== 204) throw new Error('Failed to remove member');
+            await fetchProjectMembers(projectId);
+            try { await fetchActivitiesForProject(projectId); } catch {}
+        } catch (err) {
+            console.error('Failed to remove member:', err);
+        }
+    };
+
     return {
         projects,
         companies,
         contacts,
-        teamMembers,
+    teamMembers,
+    projectMembersByProject,
         selectedProjectId,
         setSelectedProjectId,
         handleAddProject,
@@ -888,6 +947,9 @@ export const useCrmData = () => {
     saveProjectEstimate,
     getProjectEstimate,
     generateProjectQuote,
+    reloadProjectMembers: fetchProjectMembers,
+    addProjectMember,
+    removeProjectMember,
     reloadActivitiesForProject: fetchActivitiesForProject,
     reloadUnreadSummary: fetchUnreadSummary,
     markProjectActivitiesRead,
