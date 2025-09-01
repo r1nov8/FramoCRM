@@ -89,9 +89,36 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
 });
 
+// --- Database connection (Render-compatible) ---
+// Normalize connection string and make SSL explicit for hosted DBs
+let RAW_DB_URL = process.env.DATABASE_URL ? String(process.env.DATABASE_URL).trim() : '';
+if (RAW_DB_URL && RAW_DB_URL.startsWith('postgresql://')) {
+  // Some pg versions work better with postgres://
+  RAW_DB_URL = 'postgres://' + RAW_DB_URL.slice('postgresql://'.length);
+}
+
+// Basic diagnostics to help when connection fails
+try {
+  if (RAW_DB_URL) {
+    const u = new URL(RAW_DB_URL);
+    const hostInfo = `${u.hostname}${u.port ? ':' + u.port : ''}/${(u.pathname || '').replace(/^\//, '')}`;
+    console.log(`[DB] Connecting to ${hostInfo} (ssl=${u.searchParams.get('ssl') || u.searchParams.get('sslmode') || 'n/a'})`);
+  } else {
+    console.log('[DB] No DATABASE_URL provided, defaulting to local postgres at postgres://crmuser:crmpassword@localhost:5432/crmdb');
+  }
+} catch {}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://crmuser:crmpassword@localhost:5432/crmdb',
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  connectionString: RAW_DB_URL || 'postgres://crmuser:crmpassword@localhost:5432/crmdb',
+  // On Render (external URL), SSL is required. For local dev, disable.
+  ssl: RAW_DB_URL ? { rejectUnauthorized: false, require: true } : false,
+});
+
+// Helpful listener to surface initial connection errors clearly
+pool.on('error', (err) => {
+  if (err && (err.code === 'ENOTFOUND' || /ENOTFOUND/.test(String(err)))) {
+    console.error('\n[DB] DNS could not resolve your database host. If you\'re running locally, ensure you\'re using the External Database URL from Render, not the Internal URL.');
+  }
 });
 
 // Ensure required tables exist (idempotent safety for dev)
@@ -620,18 +647,34 @@ app.get('/api/team-members', async (req, res) => {
 // --- Companies CRUD Endpoints ---
 app.get('/api/companies', async (req, res) => {
   try {
-    // Return CSV-aligned aliases for UI plus all raw columns
-    const { rows } = await pool.query(
-      'SELECT companies.*, ' +
-      '"Company" as name, ' +
-      '"Company Primary Activity - Level 1" as type, ' +
-      '"Company Nationality/Region" as location, ' +
-      '"Company Website" as website, ' +
-      '"Company City" as address ' +
-      'FROM companies ' +
-      'WHERE COALESCE(TRIM("Company"), \'\') <> \'\' ' +
-      'ORDER BY id DESC'
-    );
+    // Try normalized-first; on 42703 (missing columns), fall back to legacy-only
+    const sqlNorm = `
+      SELECT c.*,
+             COALESCE(c.name, "Company") AS name,
+             COALESCE(c.primary_activity_level_1, "Company Primary Activity - Level 1") AS type,
+             COALESCE(c.nationality_region, "Company Nationality/Region") AS location,
+             COALESCE(c.website, "Company Website") AS website,
+             COALESCE(c.city, "Company City") AS address
+        FROM companies c
+       WHERE COALESCE(NULLIF(TRIM(COALESCE(c.name, "Company")), ''), '') <> ''
+       ORDER BY c.id DESC`;
+    try {
+      const { rows } = await pool.query(sqlNorm);
+      return res.json(rows);
+    } catch (e) {
+      if (!(e && e.code === '42703')) throw e;
+    }
+    const sqlLegacy = `
+      SELECT companies.*, 
+             "Company" AS name,
+             "Company Primary Activity - Level 1" AS type,
+             "Company Nationality/Region" AS location,
+             "Company Website" AS website,
+             "Company City" AS address
+        FROM companies
+       WHERE COALESCE(TRIM("Company"), '') <> ''
+       ORDER BY id DESC`;
+    const { rows } = await pool.query(sqlLegacy);
     res.json(rows);
   } catch (err) {
     console.error('Get companies error:', err);
@@ -643,25 +686,42 @@ app.post('/api/companies', async (req, res) => {
   try {
     const { name, type, location, address, website } = req.body;
     if (!name) return res.status(400).json({ error: 'Missing name' });
-    // Map to CSV-aligned columns. Address approximates to "Company City" if provided.
+    // Insert into both normalized and legacy columns for compatibility
     const company = String(name).trim();
     const activity = type ? String(type).trim() : null;
     const nationality = location ? String(location).trim() : null;
     const city = address ? String(address).trim() : null;
     const site = website ? String(website).trim() : null;
-    const insertCols = ['Company'];
-    const values = [company];
-    if (activity) { insertCols.push('Company Primary Activity - Level 1'); values.push(activity); }
-    if (nationality) { insertCols.push('Company Nationality/Region'); values.push(nationality); }
-    if (city) { insertCols.push('Company City'); values.push(city); }
-    if (site) { insertCols.push('Company Website'); values.push(site); }
-    const placeholders = insertCols.map((_, i) => `$${i + 1}`);
-    const quotedCols = insertCols.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
-    const { rows } = await pool.query(
-      `INSERT INTO companies (${quotedCols}) VALUES (${placeholders.join(', ')}) RETURNING *`,
-      values
-    );
-    res.status(201).json(rows[0]);
+
+    const cols = ['name', '"Company"'];
+    const vals = [company, company];
+    if (activity) { cols.push('primary_activity_level_1', '"Company Primary Activity - Level 1"'); vals.push(activity, activity); }
+    if (nationality) { cols.push('nationality_region', '"Company Nationality/Region"'); vals.push(nationality, nationality); }
+    if (city) { cols.push('city', '"Company City"'); vals.push(city, city); }
+    if (site) { cols.push('website', '"Company Website"'); vals.push(site, site); }
+    const ph = vals.map((_, i) => `$${i + 1}`).join(', ');
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO companies (${cols.join(', ')}) VALUES (${ph}) RETURNING *`,
+        vals
+      );
+      return res.status(201).json(rows[0]);
+    } catch (e) {
+      if (!(e && e.code === '42703')) throw e; // missing normalized columns
+      const insertCols = ['Company'];
+      const values = [company];
+      if (activity) { insertCols.push('Company Primary Activity - Level 1'); values.push(activity); }
+      if (nationality) { insertCols.push('Company Nationality/Region'); values.push(nationality); }
+      if (city) { insertCols.push('Company City'); values.push(city); }
+      if (site) { insertCols.push('Company Website'); values.push(site); }
+      const placeholders = insertCols.map((_, i) => `$${i + 1}`);
+      const quotedCols = insertCols.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
+      const { rows } = await pool.query(
+        `INSERT INTO companies (${quotedCols}) VALUES (${placeholders.join(', ')}) RETURNING *`,
+        values
+      );
+      return res.status(201).json(rows[0]);
+    }
   } catch (err) {
     console.error('Add company error:', err);
     // Handle duplicate company name (unique index on lower("Company"))
@@ -689,34 +749,80 @@ app.put('/api/companies/:id', async (req, res) => {
       'Group Company',
       'Company Tel Number'
     ];
-    // Backward-compatible mapping
+    // Map normalized names to both normalized and legacy columns
     const compat = {
-      name: 'Company',
-      type: 'Company Primary Activity - Level 1',
-      location: 'Company Nationality/Region',
-      address: 'Company City',
-      website: 'Company Website'
+      name: ['name', '"Company"'],
+      type: ['primary_activity_level_1', '"Company Primary Activity - Level 1"'],
+      location: ['nationality_region', '"Company Nationality/Region"'],
+      address: ['city', '"Company City"'],
+      website: ['website', '"Company Website"'],
+      vessels: ['vessels', '"Vessels"'],
+      nationality_region: ['nationality_region', '"Company Nationality/Region"'],
+      primary_activity_level_1: ['primary_activity_level_1', '"Company Primary Activity - Level 1"'],
+      city: ['city', '"Company City"'],
+      size: ['size', '"Company Size"'],
+      main_vessel_type: ['main_vessel_type', '"Company Main Vessel Type"'],
+      email: ['email', '"Company Email Address"'],
+      group_company: ['group_company', '"Group Company"'],
+      tel_number: ['tel_number', '"Company Tel Number"']
     };
     const updates = [];
     const values = [];
     for (const [k, v] of Object.entries(body)) {
-      let col = null;
-      if (csvCols.includes(k)) col = k;
-      else if (compat[k]) col = compat[k];
-      if (col && v !== undefined) {
-        const q = '"' + col.replace(/"/g, '""') + '" = $' + (values.length + 1);
+      if (v === undefined) continue;
+      if (csvCols.includes(k)) {
+        const q = '"' + k.replace(/"/g, '""') + '" = $' + (values.length + 1);
         updates.push(q);
         values.push(v);
+        // mirror into normalized column when known
+        const match = Object.entries(compat).find(([_, pair]) => pair[1] && pair[1] === '"' + k + '"');
+        if (match) {
+          updates.push(match[1][0] + ' = $' + (values.length + 1));
+          values.push(v);
+        }
+      } else if (compat[k]) {
+        const [norm, legacy] = compat[k];
+        updates.push(norm + ' = $' + (values.length + 1));
+        values.push(v);
+        if (legacy) {
+          updates.push(legacy + ' = $' + (values.length + 1));
+          values.push(v);
+        }
       }
     }
     if (!updates.length) return res.status(400).json({ error: 'No updatable fields provided' });
     values.push(id);
-    const { rows } = await pool.query(
-      `UPDATE companies SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`,
-      values
-    );
-    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
+    try {
+      const { rows } = await pool.query(
+        `UPDATE companies SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`,
+        values
+      );
+      if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+      return res.json(rows[0]);
+    } catch (e) {
+      if (!(e && e.code === '42703')) throw e;
+      // Fallback: only update legacy columns
+      const csvCols = [
+        'Company', 'Vessels', 'Company Nationality/Region', 'Company Primary Activity - Level 1',
+        'Company City', 'Company Size', 'Company Main Vessel Type', 'Company Website',
+        'Company Email Address', 'Group Company', 'Company Tel Number'
+      ];
+      const updatesLegacy = [];
+      const valuesLegacy = [];
+      for (const [k, v] of Object.entries(body)) {
+        if (!csvCols.includes(k)) continue;
+        updatesLegacy.push('"' + k.replace(/"/g, '""') + '" = $' + (valuesLegacy.length + 1));
+        valuesLegacy.push(v);
+      }
+      if (!updatesLegacy.length) return res.status(400).json({ error: 'No updatable fields provided' });
+      valuesLegacy.push(id);
+      const { rows } = await pool.query(
+        `UPDATE companies SET ${updatesLegacy.join(', ')} WHERE id = $${valuesLegacy.length} RETURNING *`,
+        valuesLegacy
+      );
+      if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+      return res.json(rows[0]);
+    }
   } catch (err) {
     console.error('Update company error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -798,8 +904,16 @@ app.delete('/api/contacts/:id', async (req, res) => {
 // --- Products CRUD Endpoints ---
 app.get('/api/products', async (req, res) => {
   try {
+    const { rows: items } = await pool.query(
+      `SELECT li.id, li.project_id, COALESCE(li.legacy_type, pv.variant_name) AS type,
+              li.quantity::numeric AS quantity, li.capacity, li.head
+         FROM project_line_items li
+    LEFT JOIN product_variants pv ON pv.id = li.product_variant_id
+        ORDER BY li.id DESC`
+    );
+    if (items.length > 0) return res.json(items);
     const { rows } = await pool.query('SELECT * FROM products ORDER BY id DESC');
-    res.json(rows);
+    return res.json(rows);
   } catch (err) {
     console.error('Get products error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -811,7 +925,7 @@ app.post('/api/products', async (req, res) => {
     const { projectId, type, quantity, capacity, head } = req.body;
     if (!projectId || !type || !quantity) return res.status(400).json({ error: 'Missing fields' });
     const { rows } = await pool.query(
-      'INSERT INTO products (project_id, type, quantity, capacity, head) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      'INSERT INTO project_line_items (project_id, legacy_type, quantity, capacity, head) VALUES ($1, $2, $3, $4, $5) RETURNING id, project_id, legacy_type AS type, quantity, capacity, head',
       [projectId, type, quantity, capacity, head]
     );
     res.status(201).json(rows[0]);
@@ -824,10 +938,19 @@ app.post('/api/products', async (req, res) => {
 app.put('/api/products/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { type, quantity, capacity, head } = req.body;
+    const { projectId, type, quantity, capacity, head } = req.body;
+    const updates = [];
+    const values = [];
+    if (projectId !== undefined) { updates.push(`project_id = $${values.length + 1}`); values.push(projectId); }
+    if (type !== undefined) { updates.push(`legacy_type = $${values.length + 1}`); values.push(type); }
+    if (quantity !== undefined) { updates.push(`quantity = $${values.length + 1}`); values.push(quantity); }
+    if (capacity !== undefined) { updates.push(`capacity = $${values.length + 1}`); values.push(capacity); }
+    if (head !== undefined) { updates.push(`head = $${values.length + 1}`); values.push(head); }
+    if (!updates.length) return res.status(400).json({ error: 'No updatable fields provided' });
+    values.push(id);
     const { rows } = await pool.query(
-      'UPDATE products SET type = $1, quantity = $2, capacity = $3, head = $4 WHERE id = $5 RETURNING *',
-      [type, quantity, capacity, head, id]
+      `UPDATE project_line_items SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING id, project_id, legacy_type AS type, quantity, capacity, head`,
+      values
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
@@ -841,10 +964,195 @@ app.delete('/api/products/:id', async (req, res) => {
   try {
     const idNum = Number(req.params.id);
     if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
-    await pool.query('DELETE FROM products WHERE id = $1', [idNum]);
+    await pool.query('DELETE FROM project_line_items WHERE id = $1', [idNum]);
     res.status(204).end();
   } catch (err) {
     console.error('Delete product error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Project Line Items (scoped) ---
+function lineItemRowToApi(r) {
+  return {
+    id: String(r.id),
+    projectId: String(r.project_id),
+    productVariantId: r.product_variant_id != null ? String(r.product_variant_id) : null,
+    type: r.legacy_type || null,
+    quantity: r.quantity != null ? Number(r.quantity) : null,
+    capacity: r.capacity != null ? Number(r.capacity) : null,
+    head: r.head != null ? Number(r.head) : null,
+    unitPrice: r.unit_price != null ? Number(r.unit_price) : null,
+    currency: r.currency || null,
+    discount: r.discount != null ? Number(r.discount) : null,
+    unit: 'of',
+    notes: r.notes || null,
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : undefined,
+    updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : undefined,
+  };
+}
+
+// List line items for a project
+app.get('/api/projects/:id/line-items', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
+    const { rows } = await pool.query(
+      'SELECT * FROM project_line_items WHERE project_id = $1 ORDER BY id DESC',
+      [pid]
+    );
+    res.json(rows.map(lineItemRowToApi));
+  } catch (err) {
+    console.error('Get line items error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Add a line item to a project
+app.post('/api/projects/:id/line-items', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
+    const b = req.body || {};
+    const { productVariantId = null, type = null, quantity = null, capacity = null, head = null, unitPrice = null, currency = null, discount = null, description = null, notes = null } = b;
+    const finalNotes = description ? String(description) : (notes ? String(notes) : null);
+    const { rows } = await pool.query(
+      `INSERT INTO project_line_items (project_id, product_variant_id, legacy_type, quantity, capacity, head, unit_price, currency, discount, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [pid, productVariantId ? Number(productVariantId) : null, type, quantity, capacity, head, unitPrice, currency, discount, finalNotes]
+    );
+    res.status(201).json(lineItemRowToApi(rows[0]));
+  } catch (err) {
+    console.error('Add line item error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update a line item
+app.put('/api/line-items/:itemId', requireAuth, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const b = req.body || {};
+    const map = {
+      productVariantId: 'product_variant_id',
+      type: 'legacy_type',
+      quantity: 'quantity',
+      capacity: 'capacity',
+      head: 'head',
+      unitPrice: 'unit_price',
+      currency: 'currency',
+      discount: 'discount',
+      description: 'notes',
+      notes: 'notes'
+    };
+    const updates = [];
+    const values = [];
+    for (const [k, v] of Object.entries(b)) {
+      if (!Object.prototype.hasOwnProperty.call(map, k)) continue;
+      const col = map[k];
+      const val = (k === 'productVariantId') ? (v ? Number(v) : null) : v;
+      updates.push(`${col} = $${values.length + 1}`);
+      values.push(val);
+    }
+    if (!updates.length) return res.status(400).json({ error: 'No updatable fields provided' });
+    values.push(itemId);
+    const { rows } = await pool.query(
+      `UPDATE project_line_items SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(lineItemRowToApi(rows[0]));
+  } catch (err) {
+    console.error('Update line item error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete a line item
+app.delete('/api/line-items/:itemId', requireAuth, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    await pool.query('DELETE FROM project_line_items WHERE id = $1', [itemId]);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Delete line item error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Project Members CRUD ---
+// List members for a project (joined with team_members)
+app.get('/api/projects/:id/members', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
+    const { rows } = await pool.query(
+      `SELECT pm.id, pm.project_id, pm.team_member_id, pm.role,
+              tm.first_name, tm.last_name, tm.initials, tm.job_title, tm.user_id
+         FROM project_members pm
+         JOIN team_members tm ON tm.id = pm.team_member_id
+        WHERE pm.project_id = $1
+        ORDER BY pm.id DESC`,
+      [pid]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Get project members error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Add a member to a project
+app.post('/api/projects/:id/members', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
+    const { teamMemberId, role = null } = req.body || {};
+    if (!teamMemberId) return res.status(400).json({ error: 'Missing teamMemberId' });
+    const { rows } = await pool.query(
+      `INSERT INTO project_members (project_id, team_member_id, role)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (project_id, team_member_id) DO UPDATE SET role = EXCLUDED.role
+       RETURNING *`,
+      [pid, teamMemberId, role]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('Add project member error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update a project member (role)
+app.put('/api/project-members/:memberId', requireAuth, async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    const { role = null } = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE project_members SET role = $1 WHERE id = $2 RETURNING *',
+      [role, memberId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Update project member error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Remove a project member
+app.delete('/api/project-members/:memberId', requireAuth, async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    await pool.query('DELETE FROM project_members WHERE id = $1', [memberId]);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Delete project member error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -904,8 +1212,10 @@ function estimateRowToApi(r) {
 app.get('/api/projects/:id/estimates', async (req, res) => {
   try {
     const { id } = req.params;
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
     const type = (req.query.type && String(req.query.type)) || 'anti_heeling';
-    const { rows } = await pool.query('SELECT * FROM project_estimates WHERE project_id = $1 AND type = $2', [id, type]);
+    const { rows } = await pool.query('SELECT * FROM project_estimates WHERE project_id = $1 AND type = $2', [pid, type]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(estimateRowToApi(rows[0]));
   } catch (err) {
@@ -950,11 +1260,13 @@ app.post('/api/projects/:id/estimates', requireAuth, async (req, res) => {
 app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { type = 'anti_heeling' } = req.body || {};
-    const pr = await pool.query('SELECT * FROM projects WHERE id = $1', [id]);
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
+    const { type = 'anti_heeling', syncLineItems = true, format = 'docx' } = req.body || {};
+    const pr = await pool.query('SELECT * FROM projects WHERE id = $1', [pid]);
     const proj = pr.rows[0];
     if (!proj) return res.status(404).json({ error: 'Project not found' });
-  const est = await pool.query('SELECT * FROM project_estimates WHERE project_id = $1 AND type = $2', [id, type]);
+  const est = await pool.query('SELECT * FROM project_estimates WHERE project_id = $1 AND type = $2', [pid, type]);
     if (!est.rows.length) return res.status(400).json({ error: 'No estimate data saved' });
 
     // Determine if this is an Anti-Heeling quote for labeling and filename
@@ -977,6 +1289,96 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
       } catch {}
     }
 
+    function pick(val, def) { return val !== undefined && val !== null && val !== '' ? val : def; }
+    function num(n) { const v = Number(n); return Number.isFinite(v) ? v : undefined; }
+
+    // Build quote items from estimate data (pump + common components)
+    const estDataSafe = est.rows[0].data || {};
+    const items = [];
+    // Pump item
+    const pumpQty = pick(num(estDataSafe.pumpQuantity), proj.pumps_per_vessel || 1);
+    const pumpType = pick(estDataSafe.pumpType, 'RBP-250 inline reversible single stage propeller pump');
+    const cap = pick(num(estDataSafe.capacity_m3h), proj.flow_capacity_m3h);
+    const head = pick(num(estDataSafe.head_mwc), proj.flow_mwc);
+    const power = pick(num(estDataSafe.power_kw), proj.flow_power_kw);
+    const ex = Boolean(estDataSafe.ex) || String(estDataSafe.motorRating || '').toUpperCase().includes('EX');
+    const motorType = pick(estDataSafe.motorType, ex ? 'Ex motor' : 'IE3');
+    const ipPart = ex ? 'Ex-rated motor' : 'IP55';
+    const grid = pick(estDataSafe.supply, '440V/60Hz/3ph');
+    const motorPower = pick(num(estDataSafe.motor_power_kw), power);
+    const capStr = [cap != null ? `${cap} m3/h` : null, head != null ? `${head} mwc` : null, power != null ? `${power} kW` : null]
+      .filter(Boolean).join(' @ ');
+    const pumpDesc = `${pumpType}, capacity ${capStr || 'n/a'}, ${ipPart} el. motor${motorPower!=null?` rating ${motorPower} kW`:''} (${motorType}) at ${grid}. Thermistor and space-heater included.`;
+    if (pumpQty && pumpQty > 0) {
+      items.push({ kind: 'pump', qty: pumpQty, unit: 'of', description: pumpDesc, capacity: cap, head });
+    }
+
+    // Control system (MCU)
+    const csQty = num(estDataSafe.controlSystemQty) ?? 1;
+    if (csQty > 0) {
+      const csMode = pick(estDataSafe.controlSystemMode, 'Automatically or manually operated');
+      const csScreen = pick(estDataSafe.controlSystemScreen, '7” touch screen');
+      const csMount = pick(estDataSafe.controlSystemMount, 'desk or cabinet-wall mounted');
+      const csIface = pick(estDataSafe.controlSystemInterface, 'ModBus RS485 for interface to vessel IAS');
+      const csDesc = `${csMode} control system (MCU) with ${csScreen}, ${csMount}. ${csIface}.`;
+      items.push({ kind: 'control_system', qty: csQty, unit: 'of', description: csDesc });
+    }
+
+    // DOL starters
+    const starterQty = num(estDataSafe.starterQty) ?? (pumpQty || 0);
+    if (starterQty > 0) {
+      const stDesc = 'DOL starter for the el. motor with ammeter, running-hour and emergency stop.';
+      items.push({ kind: 'starter', qty: starterQty, unit: 'of', description: stDesc });
+    }
+
+    // Butterfly valves
+    const valveQty = num(estDataSafe.valveQty);
+    const valveDN = pick(estDataSafe.valveDN, 'DN400');
+    const valveType = pick(estDataSafe.valveType, 'LUG');
+    const singleAct = num(estDataSafe.valveSingleActingQty) ?? 1;
+    const doubleAct = num(estDataSafe.valveDoubleActingQty) ?? 1;
+    const airFilter = (estDataSafe.valveAirDryFilter ?? true) ? ' with air dry filter' : '';
+    if (valveQty && valveQty > 0) {
+      const vDesc = `Pneumatically butterfly valve ${valveDN} ${valveType}.\n1-of single + 1-of double acting${airFilter}.`;
+      items.push({ kind: 'valve', qty: valveQty, unit: 'of', description: vDesc });
+    }
+
+    // Level switches
+    const levelSwitchQty = num(estDataSafe.levelSwitchQty);
+    if (levelSwitchQty && levelSwitchQty > 0) {
+      const lsDesc = 'Level switch for high/low level alarm in tanks';
+      items.push({ kind: 'level_switch', qty: levelSwitchQty, unit: 'of', description: lsDesc });
+    }
+
+    // Tools, manuals, certificates (set)
+    const includeTools = estDataSafe.toolsSet === true || estDataSafe.includeTools === true;
+    if (includeTools) {
+      items.push({ kind: 'tools_set', qty: 1, unit: 'set', description: 'Tools, service manuals and class required certificates.' });
+    }
+
+    // Startup assistance
+    const supportPersons = num(estDataSafe.startupSupportPersons) ?? 1;
+    const supportDays = num(estDataSafe.startupSupportDays) ?? null;
+    const includeSupport = estDataSafe.startupSupport === true || supportDays != null;
+    if (includeSupport) {
+      const daysTxt = supportDays != null ? `, ${supportDays}-working days` : '';
+      items.push({ kind: 'startup_support', qty: 1, unit: 'of', description: `Assistance at start-up commissioning of the system, ${supportPersons}-man${daysTxt}.` });
+    }
+
+    // TODO: extend with valves, controls, pipes, etc., based on estDataSafe
+
+    function wrapText(s, width = 100) {
+      const words = String(s || '').split(/\s+/);
+      const lines = [];
+      let cur = '';
+      for (const w of words) {
+        if (!cur.length) { cur = w; continue; }
+        if ((cur + ' ' + w).length > width) { lines.push(cur); cur = w; } else { cur += ' ' + w; }
+      }
+      if (cur) lines.push(cur);
+      return lines.length ? lines : [''];
+    }
+
   const now = new Date();
     const ymd = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const currency = proj.currency || 'USD';
@@ -989,37 +1391,49 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
     const shippingRegion = (estData.shippingRegion && String(estData.shippingRegion)) || '';
     const startupLocation = (estData.startupLocation && String(estData.startupLocation)) || '';
 
-  const lines = [];
-  lines.push(isAntiHeeling ? 'Quote Anti-Heeling' : 'Quote');
+    const lines = [];
+    lines.push(`Quotation ${isAntiHeeling ? 'Anti-Heeling' : ''}`.trim());
     lines.push('');
-    lines.push(`Date: ${ymd}`);
-    // In Anti-Heeling, show Project.no (maps to opportunity_number in DB)
-    lines.push(`Project: ${proj.name}`);
-    if (proj.opportunity_number) {
-      lines.push(`${isAntiHeeling ? 'Project.no' : 'Opp. No'}: ${proj.opportunity_number}`);
+    const header = [
+      `Project no.: ${proj.opportunity_number || '—'}`,
+      `Vessel: ${proj.vessel_size && proj.vessel_size_unit ? `${proj.vessel_size} ${proj.vessel_size_unit}` : '—'}`,
+      `Date: ${ymd}`,
+      `No. of pages: 1`
+    ];
+    lines.push(header.join(' | '));
+    lines.push('');
+    lines.push('Scope of supply and price.');
+    lines.push('');
+    // Items table (no per-item prices)
+    if (items.length) {
+      const wIdx = 4, wQty = 4, wUnit = 5, wDesc = 100;
+      const pad = (s, w) => String(s ?? '').padEnd(w, ' ').slice(0, w);
+      lines.push(`${pad('Item', wIdx)}  ${pad('Qty', wQty)}  ${pad('', wUnit)}  Description`);
+      let i = 1;
+      for (const it of items) {
+        const descLines = wrapText(it.description, wDesc);
+        const unit = it.unit || 'of';
+        lines.push(`${pad(String(i), wIdx)}  ${pad(String(it.qty), wQty)}  ${pad(unit, wUnit)}  ${descLines[0]}`);
+        for (let k = 1; k < descLines.length; k++) {
+          lines.push(`${pad('', wIdx)}  ${pad('', wQty)}  ${pad('', wUnit)}  ${descLines[k]}`);
+        }
+        i++;
+      }
+      lines.push('');
     }
-    if (shipyardName) lines.push(`Shipyard: ${shipyardName}`);
-    if (ownerName) lines.push(`Vessel Owner: ${ownerName}`);
-    if (proj.vessel_size && proj.vessel_size_unit) lines.push(`Vessel Size: ${proj.vessel_size} ${proj.vessel_size_unit}`);
+    // Price only (no per-item prices)
+    lines.push(`Price: ${currency} ${total.toLocaleString()}`);
     lines.push('');
-    lines.push('Commercials');
-    lines.push(`- Currency: ${currency}`);
-    lines.push(`- Quote Price / Vessel: ${pricePerVessel.toLocaleString()} ${currency}`);
-    lines.push(`- Number of Vessels: ${numberOfVessels}`);
-    lines.push(`- Total Quote: ${total.toLocaleString()} ${currency}`);
-    lines.push(`- Gross Margin: ${gm}`);
-    lines.push('');
+
+    // Optional extra info below
     if (proj.flow_description || proj.flow_capacity_m3h || proj.flow_mwc || proj.flow_power_kw) {
-      lines.push('Flow Specification');
       const descr = proj.flow_description || '';
       const cap = proj.flow_capacity_m3h != null ? `${Number(proj.flow_capacity_m3h)} m3/h` : '';
       const mwc = proj.flow_mwc != null ? `${Number(proj.flow_mwc)} mwc` : '';
       const kw = proj.flow_power_kw != null ? `${Number(proj.flow_power_kw)} kW` : '';
       const parts = [cap, mwc, kw].filter(Boolean).join(' @ ');
-      lines.push(`- ${descr || parts || '—'}`);
-      lines.push('');
+      lines.push(`Flow: ${descr || parts || '—'}`);
     }
-    lines.push('Estimator Summary');
     if (startupLocation) lines.push(`- Startup Location: ${startupLocation}`);
     if (shippingRegion) lines.push(`- Shipping Region: ${shippingRegion}`);
     if (comments) {
@@ -1030,22 +1444,157 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
     lines.push('');
     lines.push('This is an automatically generated draft quote.');
 
-    const content = lines.join('\n');
-    const buf = Buffer.from(content, 'utf8');
-    const base64 = buf.toString('base64');
-  const fileNameSafe = (proj.name || 'quote').replace(/[^a-z0-9-_]+/gi, '_');
-  const oppPart = proj.opportunity_number ? `_Opp-${String(proj.opportunity_number).replace(/[^a-z0-9-_]+/gi, '')}` : '';
-  const prefix = isAntiHeeling ? 'Quote_Anti-Heeling' : 'Quote';
-  const fileName = `${prefix}${oppPart}_${fileNameSafe}_${ymd}.txt`;
+    // Optionally sync items into project_line_items (idempotent-ish: remove previous auto items first)
+    if (syncLineItems && items.length) {
+      try {
+        await pool.query(`DELETE FROM project_line_items WHERE project_id = $1 AND notes LIKE 'AUTO:%'`, [pid]);
+        for (const it of items) {
+          const notes = 'AUTO: ' + it.description;
+          await pool.query(
+            'INSERT INTO project_line_items (project_id, legacy_type, quantity, capacity, head, notes) VALUES ($1, $2, $3, $4, $5, $6)',
+            [pid, it.kind, it.qty, it.capacity ?? null, it.head ?? null, notes]
+          );
+        }
+      } catch (e) {
+        console.warn('Warning: syncing line items failed:', e?.message || e);
+      }
+    }
+
+    // Render output
+    let outBuffer; let outName; let outMime;
+    const fileNameSafe = (proj.name || 'quote').replace(/[^a-z0-9-_]+/gi, '_');
+    const oppPart = proj.opportunity_number ? `_Opp-${String(proj.opportunity_number).replace(/[^a-z0-9-_]+/gi, '')}` : '';
+    const prefix = isAntiHeeling ? 'Quote_Anti-Heeling' : 'Quote';
+
+    let localFormat = String(format).toLowerCase();
+    // Try DOCX template in backend/files/templates first
+    if (localFormat === 'docx' && !outBuffer) {
+      try {
+        const templatesDir = path.join(__dirname, 'files', 'templates');
+        // Prefer the provided file name, fall back to legacy name, then any .docx
+        const preferred = ['Quote Anti-Heeling MAL.docx', 'quote_anti_heeling.docx'];
+        let templatePath = null;
+        for (const name of preferred) {
+          const p = path.join(templatesDir, name);
+          if (fs.existsSync(p)) { templatePath = p; break; }
+        }
+        if (!templatePath) {
+          const list = fs.existsSync(templatesDir) ? fs.readdirSync(templatesDir) : [];
+          const firstDocx = list.find(f => f.toLowerCase().endsWith('.docx'));
+          if (firstDocx) templatePath = path.join(templatesDir, firstDocx);
+        }
+        if (fs.existsSync(templatePath)) {
+          const docxtemplaterMod = await import('docxtemplater');
+          const PizZipMod = await import('pizzip');
+          const DocxTemplater = docxtemplaterMod.default || docxtemplaterMod;
+          const PizZip = PizZipMod.default || PizZipMod;
+          const tplBuf = fs.readFileSync(templatePath);
+          const zip = new PizZip(tplBuf);
+          const doc = new DocxTemplater(zip, { paragraphLoop: true, linebreaks: true });
+          let scopeLines = [];
+          let idx = 1;
+          for (const it of items) {
+            scopeLines.push(`${idx}  ${it.qty} ${it.unit || 'of'}  ${it.description}`);
+            idx++;
+          }
+          const data = {
+            date: ymd,
+            project_no: proj.opportunity_number || '',
+            project_name: proj.name || '',
+            vessel_owner: ownerName || '',
+            shipyard: shipyardName || '',
+            vessel_type: proj.project_type || '',
+            vessel_name: estData.vesselName || '',
+            vessel_size: proj.vessel_size || '',
+            vessel_size_unit: proj.vessel_size_unit || '',
+            scope_of_supply: scopeLines.join('\n'),
+            items: items.map((it, i) => ({ index: i + 1, qty: it.qty, unit: it.unit || 'of', description: it.description })),
+            flow_spec: proj.flow_description || '',
+            flow_capacity_m3h: proj.flow_capacity_m3h || '',
+            flow_mwc: proj.flow_mwc || '',
+            flow_power_kw: proj.flow_power_kw || '',
+            pump_quantity: items.find(i => i.kind === 'pump')?.qty || '',
+            currency: currency,
+            base_price: pricePerVessel || '',
+            options_price: '',
+            number_of_vessels: numberOfVessels,
+            total_price: total,
+            delivery_time: estData.deliveryTime || '',
+            validity: estData.validity || '',
+            contact_name: estData.contactName || '',
+            contact_email: estData.contactEmail || '',
+            contact_phone: estData.contactPhone || '',
+          };
+          doc.setData(data);
+          doc.render();
+          outBuffer = Buffer.from(doc.getZip().generate({ type: 'nodebuffer' }));
+          outName = `${prefix}${oppPart}_${fileNameSafe}_${ymd}.docx`;
+          outMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        }
+      } catch {}
+    }
+    if (localFormat === 'docx' && !outBuffer) {
+      // Build DOCX with a header and an items table
+      let mod;
+      try { mod = await import('docx'); } catch { localFormat = 'txt'; }
+      if (localFormat === 'docx') {
+        const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } = mod;
+        const children = [
+          new Paragraph({ children: [new TextRun({ text: isAntiHeeling ? 'Quotation Anti-Heeling' : 'Quotation', bold: true, size: 28 })] }),
+          new Paragraph({ text: `Project no.: ${proj.opportunity_number || '—'}    Vessel: ${proj.vessel_size && proj.vessel_size_unit ? `${proj.vessel_size} ${proj.vessel_size_unit}` : '—'}    Date: ${ymd}` }),
+          new Paragraph({ text: '' }),
+          new Paragraph({ children: [new TextRun({ text: 'Scope of supply and price.', bold: true })] }),
+        ];
+
+        const tableRows = [];
+        // Header row
+        tableRows.push(new TableRow({ children: [
+          new TableCell({ children: [new Paragraph('Item')]}),
+          new TableCell({ children: [new Paragraph('Qty')]}),
+          new TableCell({ children: [new Paragraph('Unit')]}),
+          new TableCell({ children: [new Paragraph('Description')]}),
+        ]}));
+        let i = 1;
+        for (const it of items) {
+          tableRows.push(new TableRow({ children: [
+            new TableCell({ children: [new Paragraph(String(i))]}),
+            new TableCell({ children: [new Paragraph(String(it.qty))]}),
+            new TableCell({ children: [new Paragraph(String(it.unit || 'of'))]}),
+            new TableCell({ children: [new Paragraph(String(it.description))]}),
+          ]}));
+          i++;
+        }
+        const tbl = new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: tableRows,
+        });
+        children.push(tbl);
+        children.push(new Paragraph(''));
+        children.push(new Paragraph({ children: [new TextRun({ text: `Price: ${currency} ${total.toLocaleString()}`, bold: true })] }));
+
+        const doc = new Document({ sections: [{ properties: {}, children }] });
+        outBuffer = await Packer.toBuffer(doc);
+        outName = `${prefix}${oppPart}_${fileNameSafe}_${ymd}.docx`;
+        outMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      }
+    }
+    if (!outBuffer) {
+      const content = lines.join('\n');
+      outBuffer = Buffer.from(content, 'utf8');
+      outName = `${prefix}${oppPart}_${fileNameSafe}_${ymd}.txt`;
+      outMime = 'text/plain';
+    }
+
+    const base64 = outBuffer.toString('base64');
     const { rows: fileRows } = await pool.query(
       'INSERT INTO project_files (project_id, name, type, size, content) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [id, fileName, 'text/plain', buf.length, base64]
+      [pid, outName, outMime, outBuffer.length, base64]
     );
 
     try {
       const ins = await pool.query(
         'INSERT INTO activities (project_id, type, content, created_by_user_id, created_by_name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-        [id, 'note', `Generated quote document: ${fileName}`, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
+        [pid, 'note', `Generated quote document: ${outName}`, (req.user && req.user.id) || null, (req.user && req.user.username) || null]
       );
       try {
         if (req.user?.id && ins.rows[0]?.id) {
@@ -1057,7 +1606,12 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
     res.status(201).json(fileRows[0]);
   } catch (err) {
     console.error('Generate quote error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    const msg = (err && (err.message || err.toString())) || 'Internal error';
+    if (process.env.NODE_ENV !== 'production') {
+      res.status(500).json({ error: 'Generate quote failed', message: msg });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 });
 
@@ -1095,7 +1649,9 @@ function taskRowToApi(r) {
 app.get('/api/projects/:id/tasks', async (req, res) => {
   try {
     const { id } = req.params;
-    const { rows } = await pool.query('SELECT * FROM tasks WHERE project_id = $1 ORDER BY due_date NULLS LAST, id DESC', [id]);
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
+    const { rows } = await pool.query('SELECT * FROM tasks WHERE project_id = $1 ORDER BY due_date NULLS LAST, id DESC', [pid]);
     res.json(rows.map(taskRowToApi));
   } catch (err) {
     console.error('Get tasks error:', err);
@@ -1106,11 +1662,13 @@ app.get('/api/projects/:id/tasks', async (req, res) => {
 app.post('/api/projects/:id/tasks', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
     const { title, status = 'open', dueDate = null, assignedTo = null, notes = null, priority = 2 } = req.body || {};
     if (!title) return res.status(400).json({ error: 'Missing title' });
     const { rows } = await pool.query(
       'INSERT INTO tasks (project_id, title, status, due_date, assigned_to, notes, priority) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [id, title, status, dueDate, assignedTo ? Number(assignedTo) : null, notes, priority]
+      [pid, title, status, dueDate, assignedTo ? Number(assignedTo) : null, notes, priority]
     );
     const created = rows[0];
     try {
@@ -1240,7 +1798,9 @@ function activityRowToApi(r) {
 app.get('/api/projects/:id/activities', async (req, res) => {
   try {
     const { id } = req.params;
-    const { rows } = await pool.query('SELECT * FROM activities WHERE project_id = $1 ORDER BY id DESC', [id]);
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
+    const { rows } = await pool.query('SELECT * FROM activities WHERE project_id = $1 ORDER BY id DESC', [pid]);
     res.json(rows.map(activityRowToApi));
   } catch (err) {
     console.error('Get activities error:', err);
@@ -1251,6 +1811,8 @@ app.get('/api/projects/:id/activities', async (req, res) => {
 app.post('/api/projects/:id/activities', async (req, res) => {
   try {
     const { id } = req.params;
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
     const { type = 'note', content, createdBy = null } = req.body || {};
     if (!content || !String(content).trim()) return res.status(400).json({ error: 'Missing content' });
     // If caller included Authorization, attribute using token
@@ -1265,7 +1827,7 @@ app.post('/api/projects/:id/activities', async (req, res) => {
     const createdByName = user?.username ?? null;
     const { rows } = await pool.query(
       'INSERT INTO activities (project_id, type, content, created_by, created_by_name) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [id, type, content, createdById, createdByName]
+      [pid, type, content, createdById, createdByName]
     );
     try {
       if (createdById) {
@@ -1305,13 +1867,15 @@ app.get('/api/activities/unread-summary', requireAuth, async (req, res) => {
 app.post('/api/projects/:id/activities/mark-read', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    const pid = coerceProjectId(id);
+    if (!pid) return res.status(400).json({ error: 'Invalid project id' });
     const userId = req.user.id;
     const result = await pool.query(
       `INSERT INTO activity_reads (activity_id, user_id)
        SELECT a.id, $1 FROM activities a
        WHERE a.project_id = $2
        ON CONFLICT DO NOTHING`,
-      [userId, id]
+      [userId, pid]
     );
     res.json({ marked: result.rowCount || 0 });
   } catch (err) {
@@ -1387,3 +1951,8 @@ app.get('/api/diagnostics/project-type-counts', async (req, res) => {
 app.listen(port, () => {
   console.log(`CRM backend listening on port ${port}`);
 });
+// Small helpers
+function coerceProjectId(raw) {
+  const m = String(raw ?? '').match(/\d+/);
+  return m ? m[0] : null;
+}

@@ -1,0 +1,86 @@
+Quote Generation System
+=======================
+
+Goals
+- Generate project quotes driven by the Estimator inputs.
+- Produce structured line items (item no, qty, description) and sync them to DB.
+- Keep text export for quick sharing while enabling richer future formats.
+
+Data Flow
+- Estimator saves payload per project into `project_estimates (data JSONB)` using
+  `POST /api/projects/:id/estimates { type, data }`.
+- Quote generation reads project + estimate and builds an items list, then:
+  1) writes human-readable text to `project_files` (current behavior),
+  2) syncs items into `project_line_items` (new, AUTO-tagged for idempotency).
+
+API
+- Save estimate: `POST /api/projects/:id/estimates`
+  - body: `{ type: 'anti_heeling' | 'fuel_transfer' | string, data: object }`
+- Generate quote + sync items: `POST /api/projects/:id/generate-quote`
+  - body: `{ type?: string, syncLineItems?: boolean, format?: 'docx' | 'txt' }`
+  - defaults: `{ type: 'anti_heeling', syncLineItems: true, format: 'docx' }`
+
+Line Items API (Project-scoped)
+- List: `GET /api/projects/:id/line-items`
+  - returns: `[ { id, projectId, productVariantId, type, quantity, capacity, head, unitPrice, currency, discount, unit: 'of', notes, createdAt, updatedAt } ]`
+- Create: `POST /api/projects/:id/line-items` (auth)
+  - body: `{ productVariantId?, type?, quantity?, capacity?, head?, unitPrice?, currency?, discount?, description? | notes? }`
+- Update: `PUT /api/line-items/:itemId` (auth)
+  - body: any writable subset of the above fields (use `description` to set `notes`)
+- Delete: `DELETE /api/line-items/:itemId` (auth)
+
+Estimator → Items Mapping (initial)
+- Pump item
+  - Inputs (from estimate data; fallbacks shown in parens):
+    - `pumpQuantity` (fallback: `projects.pumps_per_vessel` or 1)
+    - `pumpType` (fallback: `"RBP-250 inline reversible single stage propeller pump"`)
+    - `capacity_m3h` (fallback: `projects.flow_capacity_m3h`)
+    - `head_mwc` (fallback: `projects.flow_mwc`)
+    - `power_kw` (fallback: `projects.flow_power_kw`)
+    - `ex` boolean or `motorRating` contains "EX"
+    - `motorType` (fallback: `"Ex motor"` when ex true, else `"IE3"`)
+    - `motor_power_kw` (fallback: `power_kw`)
+    - `supply` (fallback: `"440V/60Hz/3ph"`)
+  - Description format:
+    - `"<pumpType>, capacity <cap> @ <head> @ <power>, <IP/Ex> el. motor rating <motor_power_kw> kW (<motorType>) at <supply>. Thermistor and space-heater included."`
+  - DB write:
+    - `project_line_items` rows with
+      - `project_id`, `legacy_type = 'pump'`, `quantity`, `capacity`, `head`, `notes = 'AUTO: ' + description`.
+
+- Control system (MCU)
+  - Inputs: `controlSystemQty` (default 1), `controlSystemMode`, `controlSystemScreen`, `controlSystemMount`, `controlSystemInterface`
+  - Default description: "Automatically or manually operated control system (MCU) with 7” touch screen, desk or cabinet-wall mounted. ModBus RS485 for interface to vessel IAS."
+
+- Starters
+  - Inputs: `starterQty` (default = pumpQuantity)
+  - Description: "DOL starter for the el. motor with ammeter, running-hour and emergency stop."
+
+- Butterfly valves
+  - Inputs: `valveQty`, `valveDN` (e.g., DN400), `valveType` (e.g., LUG), `valveSingleActingQty` (default 1), `valveDoubleActingQty` (default 1), `valveAirDryFilter` (default true)
+  - Description example: "Pneumatically butterfly valve DN400 LUG. 1-of single + 1-of double acting with air dry filter."
+
+- Level switches
+  - Inputs: `levelSwitchQty`
+  - Description: "Level switch for high/low level alarm in tanks"
+
+- Tools / manuals / certificates (set)
+  - Inputs: `toolsSet: true`
+  - Unit: `set`
+  - Description: "Tools, service manuals and class required certificates."
+
+- Startup assistance
+  - Inputs: `startupSupport: true`, `startupSupportPersons` (default 1), `startupSupportDays` (optional)
+  - Description: "Assistance at start-up commissioning of the system, <persons>-man, <days>-working days."
+
+Output
+- Default is DOCX. The generator will first try your template at `backend/files/templates/Quote Anti-Heeling MAL.docx` (preferred),
+  then `quote_anti_heeling.docx`, then the first `.docx` in that folder. If no template is available, it falls back to a
+  programmatic DOCX; if that fails, to TXT. The table shows Item, Qty, Unit, Description and a footer `Price: <CURRENCY> <TOTAL>`.
+
+Extensibility
+- Add mappers for valves, controls, piping, installation, etc.
+- Add pricing to items when available, or compute totals from line items.
+
+Backward Compatibility
+- All changes are additive. Existing endpoints and file output remain.
+- Legacy `products` API is transparently supported via `project_line_items`.

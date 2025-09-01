@@ -17,7 +17,10 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-  "pg": "^8.11.5"
+  "pg": "^8.11.5",
+    "docx": "^8.5.0",
+    "docxtemplater": "^3.45.2",
+    "pizzip": "^3.1.7"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
