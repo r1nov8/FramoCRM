@@ -9,7 +9,8 @@
   "build": "vite build",
   "preview": "vite preview",
   "health": "node scripts/health-check.cjs",
-  "smoke": "npm run -s health"
+  "smoke": "npm run -s health",
+  "probe": "node scripts/probe-backends.cjs framocrm.onrender.com framo-crm-backend.onrender.com"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
