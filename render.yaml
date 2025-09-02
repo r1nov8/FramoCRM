@@ -1,9 +1,3 @@
-databases:
-  - name: framo-crm-db
-    plan: free
-    databaseName: framo_crm
-    user: framo_user
-
 services:
   - type: web
     name: framo-crm-backend
@@ -23,10 +17,6 @@ services:
         value: "false"
       - key: ALLOW_ONRENDER
         value: "true"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: framo-crm-db
-          property: connectionString
     autoDeploy: true
     healthCheckPath: /api/health
   - type: web
