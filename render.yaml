@@ -17,12 +17,6 @@ services:
         value: "false"
       - key: ALLOW_ONRENDER
         value: "true"
-      - key: ADMIN_MAINTENANCE
-        value: public_cleanup
-      - key: BACKUP_SCHEMA
-        value: public_bak_20250902
-      - key: DROP_PUBLIC_CONFIRM
-        value: "YES"
     autoDeploy: true
     healthCheckPath: /api/health
   - type: web
