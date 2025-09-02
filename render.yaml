@@ -17,6 +17,10 @@ services:
         value: "false"
       - key: ALLOW_ONRENDER
         value: "true"
+      - key: ADMIN_MAINTENANCE
+        value: drop_schema
+      - key: SCHEMA_TO_DROP
+        value: public_bak_20250902
     autoDeploy: true
     healthCheckPath: /api/health
   - type: web
