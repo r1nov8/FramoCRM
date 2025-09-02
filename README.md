@@ -8,6 +8,8 @@ This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/drive/1LU0H7WJrzGpVFUX0ljk_jv_NbKPYL9cE
 
+• Team hub PRD: See docs/PRD.md for the end-to-end CRM workflow, data model, and API surface.
+
 ## Run Locally
 
 **Prerequisites:**  Node.js

@@ -49,7 +49,7 @@ function resolveApiBase(): string {
         }
     } catch {}
 
-    // Last resort: localhost (dev)
+    // Last resort: localhost (dev) — backend defaults to 4000 in this setup
     return 'http://localhost:4000';
 }
 
@@ -58,6 +58,20 @@ export const API_URL = resolveApiBase();
 try {
     if (typeof window !== 'undefined') {
         (window as any).API_URL = API_URL;
+        // Install a lightweight global fetch wrapper for graceful 401 handling once
+        if (!(window as any).__crm_fetch_wrapped) {
+            const origFetch = window.fetch.bind(window);
+            (window as any).__crm_fetch_wrapped = true;
+            window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+                const res = await origFetch(input as any, init);
+                if (res && res.status === 401) {
+                    try {
+                        window.dispatchEvent(new CustomEvent('crm:auth-expired'));
+                    } catch {}
+                }
+                return res;
+            };
+        }
         console.info('[CRM] API_URL =', API_URL);
     }
 } catch {}
@@ -107,10 +121,19 @@ export const useCrmData = () => {
         return t ? { Authorization: `Bearer ${t}` } : {};
     };
 
+    // Subscribe to global auth-expired event to pause polling/state if needed
+    useEffect(() => {
+        const onExpired = () => {
+            try { setUnreadSummary({ entries: [], total: 0 }); } catch {}
+        };
+        if (typeof window !== 'undefined') window.addEventListener('crm:auth-expired', onExpired);
+        return () => { if (typeof window !== 'undefined') window.removeEventListener('crm:auth-expired', onExpired); };
+    }, []);
+
     const fetchProjects = async () => {
         if (MOCK) return; // use local initial projects
         try {
-            const res = await fetch(`${API_URL}/api/projects`);
+            const res = await fetch(`${API_URL}/api/projects`, { headers: { ...authHeaders() } });
             const data = await res.json();
             if (Array.isArray(data)) {
                 if (data.length) {
@@ -133,7 +156,7 @@ export const useCrmData = () => {
     const fetchTasksForProject = async (projectId: string) => {
         if (MOCK) { return; }
         try {
-            const res = await fetch(`${API_URL}/api/projects/${projectId}/tasks`);
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/tasks`, { headers: { ...authHeaders() } });
             const data = await res.json();
             setTasksByProject(prev => ({ ...prev, [projectId]: Array.isArray(data) ? data : [] }));
         } catch (err) {
@@ -144,7 +167,7 @@ export const useCrmData = () => {
     const fetchActivitiesForProject = async (projectId: string) => {
         if (MOCK) { return; }
         try {
-            const res = await fetch(`${API_URL}/api/projects/${projectId}/activities`);
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/activities`, { headers: { ...authHeaders() } });
             const data = await res.json();
             setActivitiesByProject(prev => ({ ...prev, [projectId]: Array.isArray(data) ? data : [] }));
         } catch (err) {
@@ -232,7 +255,7 @@ export const useCrmData = () => {
     const fetchCompanies = async () => {
         if (MOCK) { setCompanies(INITIAL_COMPANIES); return; }
         try {
-            const res = await fetch(`${API_URL}/api/companies`);
+        const res = await fetch(`${API_URL}/api/companies`, { headers: { ...authHeaders() } });
             const data = await res.json();
             if (Array.isArray(data) && data.length) {
                 setCompanies(data as any);
@@ -249,7 +272,7 @@ export const useCrmData = () => {
     const fetchContacts = async () => {
         if (MOCK) { setContacts(INITIAL_CONTACTS); return; }
         try {
-            const res = await fetch(`${API_URL}/api/contacts`);
+        const res = await fetch(`${API_URL}/api/contacts`, { headers: { ...authHeaders() } });
             const data = await res.json();
             if (Array.isArray(data) && data.length) {
                 setContacts(data as any);
@@ -266,7 +289,7 @@ export const useCrmData = () => {
     const fetchTeamMembers = async () => {
         if (MOCK) { setTeamMembers(INITIAL_TEAM_MEMBERS); return; }
         try {
-            const res = await fetch(`${API_URL}/api/team-members`);
+            const res = await fetch(`${API_URL}/api/team-members`, { headers: { ...authHeaders() } });
             const data = await res.json();
             const list = Array.isArray(data) ? data : [];
             const normalized = list.map((m: any) => {
@@ -338,6 +361,8 @@ export const useCrmData = () => {
                 const hasToken = !!localStorage.getItem('token');
                 if (!hasToken) return; // only poll when logged in
                 if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return; // pause in background
+                // Pause if auth is expired flag was raised (until user logs in again)
+                if (localStorage.getItem('token_expired') === '1') return;
                 await fetchUnreadSummary();
             } catch {}
         };
@@ -884,35 +909,48 @@ export const useCrmData = () => {
         return file;
     };
 
+    const generateProjectQuotePdf = async (projectId: string, type: string = 'anti_heeling') => {
+        if (MOCK) return null;
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/generate-quote-pdf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ type })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const file = await res.json();
+        setProjects(prev => prev.map(p => p.id === projectId ? { ...p, files: [...(p.files || []), file as any] } : p));
+        return file;
+    };
+
     const addProjectMember = async (projectId: string, teamMemberId: string, role?: string) => {
         if (MOCK) { return; }
-        try {
-            const res = await fetch(`${API_URL}/api/projects/${projectId}/members`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify({ teamMemberId: Number(teamMemberId), role: role || null })
-            });
-            if (!res.ok) throw new Error('Failed to add member');
-            await fetchProjectMembers(projectId);
-            try { await fetchActivitiesForProject(projectId); } catch {}
-        } catch (err) {
-            console.error('Failed to add member:', err);
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ teamMemberId: Number(teamMemberId), role: role || null })
+        });
+        if (!res.ok) {
+            const txt = await res.text().catch(()=> '');
+            if (res.status === 401) throw new Error('Your session expired. Please sign in again.');
+            throw new Error(txt || 'Failed to add member');
         }
+        await fetchProjectMembers(projectId);
+        try { await fetchActivitiesForProject(projectId); } catch {}
     };
 
     const removeProjectMember = async (projectId: string, teamMemberId: string) => {
         if (MOCK) { return; }
-        try {
-            const res = await fetch(`${API_URL}/api/projects/${projectId}/members/${teamMemberId}`, {
-                method: 'DELETE',
-                headers: { ...authHeaders() }
-            });
-            if (!res.ok && res.status !== 204) throw new Error('Failed to remove member');
-            await fetchProjectMembers(projectId);
-            try { await fetchActivitiesForProject(projectId); } catch {}
-        } catch (err) {
-            console.error('Failed to remove member:', err);
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/members/${teamMemberId}`, {
+            method: 'DELETE',
+            headers: { ...authHeaders() }
+        });
+        if (!res.ok && res.status !== 204) {
+            const txt = await res.text().catch(()=> '');
+            if (res.status === 401) throw new Error('Your session expired. Please sign in again.');
+            throw new Error(txt || 'Failed to remove member');
         }
+        await fetchProjectMembers(projectId);
+        try { await fetchActivitiesForProject(projectId); } catch {}
     };
 
     return {
@@ -947,6 +985,7 @@ export const useCrmData = () => {
     saveProjectEstimate,
     getProjectEstimate,
     generateProjectQuote,
+    generateProjectQuotePdf,
     reloadProjectMembers: fetchProjectMembers,
     addProjectMember,
     removeProjectMember,

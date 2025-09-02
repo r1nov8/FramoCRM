@@ -1,7 +1,7 @@
 import React from 'react';
-import { SearchIcon, LayoutGridIcon, NewspaperIcon, FileIcon } from './icons';
+import { SearchIcon, LayoutGridIcon, NewspaperIcon, FileIcon, UsersIcon, TrendingUpIcon } from './icons';
 
-type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files';
+type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files' | 'intel' | 'leads';
 
 interface IconSidebarProps {
     activeView: View;
@@ -28,6 +28,12 @@ const NavItem: React.FC<{
         >
             {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 bg-blue-500 rounded-r-full"></div>}
             {icon}
+            {/* Tooltip on hover */}
+            {title && (
+                <span className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded bg-black/80 text-white text-[10px] opacity-0 group-hover:opacity-100 whitespace-nowrap">
+                    {title}
+                </span>
+            )}
         </button>
     );
 };
@@ -60,11 +66,25 @@ export const IconSidebar: React.FC<IconSidebarProps> = ({ activeView, onNavigate
                     title="Pipeline"
                 />
                 <NavItem
-                    icon={<NewspaperIcon className="w-5 h-5" />}
+                    icon={<UsersIcon className="w-5 h-5" />}
                     isActive={activeView === 'companyInfo'}
                     onClick={() => onNavigate('companyInfo')}
-                    ariaLabel="Company Info"
-                    title="Company Info"
+                    ariaLabel="Companies"
+                    title="Companies"
+                />
+                <NavItem
+                    icon={<NewspaperIcon className="w-5 h-5" />}
+                    isActive={activeView === 'intel'}
+                    onClick={() => onNavigate('intel')}
+                    ariaLabel="Market Intelligence"
+                    title="Market Intelligence"
+                />
+                <NavItem
+                    icon={<TrendingUpIcon className="w-5 h-5" />}
+                    isActive={activeView === 'leads'}
+                    onClick={() => onNavigate('leads')}
+                    ariaLabel="Leads"
+                    title="Leads"
                 />
                 <NavItem
                     icon={<FileIcon className="w-5 h-5" />}

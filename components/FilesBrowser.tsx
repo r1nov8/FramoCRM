@@ -30,7 +30,10 @@ const FilesBrowser: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ path: string; size: number; content: string } | null>(null);
 
-  const token = useMemo(() => localStorage.getItem('token'), []);
+  // Read the token fresh on each request to avoid stale values after login
+  const getToken = () => {
+    try { return localStorage.getItem('token'); } catch { return null; }
+  };
 
   const fetchList = async (pathRel: string) => {
     setLoading(true);
@@ -38,8 +41,9 @@ const FilesBrowser: React.FC = () => {
     try {
       const url = new URL(`${API_URL}/api/files`);
       if (pathRel) url.searchParams.set('path', pathRel);
+      const t = getToken();
       const res = await fetch(url.toString(), {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers: t ? { Authorization: `Bearer ${t}` } : undefined,
       });
       if (!res.ok) {
         const t = await res.text();
@@ -63,8 +67,9 @@ const FilesBrowser: React.FC = () => {
     try {
       const url = new URL(`${API_URL}/api/file`);
       url.searchParams.set('path', pathRel);
+      const t = getToken();
       const res = await fetch(url.toString(), {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers: t ? { Authorization: `Bearer ${t}` } : undefined,
       });
       if (!res.ok) {
         const t = await res.text();

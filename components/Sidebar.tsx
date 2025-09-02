@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Project, TeamMember } from '../types';
+import { Currency } from '../types';
 import { ProjectType } from '../types';
 import { ProjectStage } from '../types';
 import { PlusIcon } from './icons';
@@ -26,6 +27,16 @@ const stageColors: { [key in ProjectStage]: string } = {
 
 export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects, teamMembers, selectedProjectId, onSelectProject, onAddProjectClick }) => {
     const [menuOpen, setMenuOpen] = React.useState(false);
+    const getCurrencySymbol = (currency: Currency | string): string => {
+        switch (currency) {
+            case Currency.USD: return '$';
+            case Currency.EUR: return '€';
+            case Currency.NOK: return 'kr';
+            case Currency.JPY: return '¥';
+            case Currency.KRW: return '₩';
+            default: return '$';
+        }
+    };
     return (
         <aside className="w-[220px] bg-white dark:bg-gray-800 flex flex-col h-full overflow-hidden min-h-0 shadow-xl !border-l-0 border-none m-0 p-0">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
@@ -60,7 +71,9 @@ export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects
             </div>
             <div className="overflow-y-auto">
                 <ul>
-                    {projects.map((project) => (
+                    {projects.map((project) => {
+                        const currencySymbol = getCurrencySymbol(project.currency);
+                        return (
                         <li key={project.id}>
                             <button
                                 onClick={() => onSelectProject(project.id)}
@@ -86,7 +99,7 @@ export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects
                                     )}
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                    Value: ${project.value.toLocaleString()}
+                                    Value: {currencySymbol}{project.value.toLocaleString()} • {project.fuelType || '—'} {project.vesselSize ? `• ${project.vesselSize}${project.vesselSizeUnit||''}`:''}
                                 </div>
                                 <div className="flex items-center mt-1">
                                     <span className={`w-2 h-2 rounded-full ${stageColors[project.stage]} mr-2`}></span>
@@ -94,7 +107,8 @@ export const ProjectListSidebar: React.FC<ProjectListSidebarProps> = ({ projects
                                 </div>
                             </button>
                         </li>
-                    ))}
+                        );
+                    })}
                 </ul>
             </div>
         </aside>

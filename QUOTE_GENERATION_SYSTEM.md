@@ -2,16 +2,16 @@ Quote Generation System
 =======================
 
 Goals
-- Generate project quotes driven by the Estimator inputs.
-- Produce structured line items (item no, qty, description) and sync them to DB.
-- Keep text export for quick sharing while enabling richer future formats.
+- Generate project quotes from Estimator inputs.
+- Produce structured line items (item no, qty, unit, description) and sync them to DB.
+- Prefer branded DOCX; auto-fallback to programmatic DOCX or TXT for reliability.
 
 Data Flow
-- Estimator saves payload per project into `project_estimates (data JSONB)` using
+- Estimator saves payload per project into `project_estimates (data JSONB)` via
   `POST /api/projects/:id/estimates { type, data }`.
-- Quote generation reads project + estimate and builds an items list, then:
-  1) writes human-readable text to `project_files` (current behavior),
-  2) syncs items into `project_line_items` (new, AUTO-tagged for idempotency).
+- Quote generation reads project + estimate, builds an items list, then:
+  1) writes a DOCX file to `project_files` (using preferred template or programmatic DOCX fallback; TXT as last resort),
+  2) syncs AUTO-tagged items into `project_line_items` (idempotent; previous AUTO items are replaced).
 
 API
 - Save estimate: `POST /api/projects/:id/estimates`
@@ -19,12 +19,13 @@ API
 - Generate quote + sync items: `POST /api/projects/:id/generate-quote`
   - body: `{ type?: string, syncLineItems?: boolean, format?: 'docx' | 'txt' }`
   - defaults: `{ type: 'anti_heeling', syncLineItems: true, format: 'docx' }`
+  - behavior: if a preferred template exists it’s used; otherwise a programmatic DOCX with an Items table is generated; TXT fallback last.
 
 Line Items API (Project-scoped)
 - List: `GET /api/projects/:id/line-items`
-  - returns: `[ { id, projectId, productVariantId, type, quantity, capacity, head, unitPrice, currency, discount, unit: 'of', notes, createdAt, updatedAt } ]`
+  - returns: `[ { id, projectId, productVariantId, type, quantity, capacity, head, unitPrice, currency, discount, unit, notes, createdAt, updatedAt } ]`
 - Create: `POST /api/projects/:id/line-items` (auth)
-  - body: `{ productVariantId?, type?, quantity?, capacity?, head?, unitPrice?, currency?, discount?, description? | notes? }`
+  - body: `{ productVariantId?, type?, quantity?, capacity?, head?, unitPrice?, currency?, discount?, unit?, description? | notes? }`
 - Update: `PUT /api/line-items/:itemId` (auth)
   - body: any writable subset of the above fields (use `description` to set `notes`)
 - Delete: `DELETE /api/line-items/:itemId` (auth)
@@ -42,7 +43,7 @@ Estimator → Items Mapping (initial)
     - `motor_power_kw` (fallback: `power_kw`)
     - `supply` (fallback: `"440V/60Hz/3ph"`)
   - Description format:
-    - `"<pumpType>, capacity <cap> @ <head> @ <power>, <IP/Ex> el. motor rating <motor_power_kw> kW (<motorType>) at <supply>. Thermistor and space-heater included."`
+    - `<pumpType>, capacity <cap> @ <head> @ <power>, <IP/Ex> el. motor rating <motor_power_kw> kW (<motorType>) at <supply>. Thermistor and space-heater included.`
   - DB write:
     - `project_line_items` rows with
       - `project_id`, `legacy_type = 'pump'`, `quantity`, `capacity`, `head`, `notes = 'AUTO: ' + description`.
@@ -73,14 +74,14 @@ Estimator → Items Mapping (initial)
   - Description: "Assistance at start-up commissioning of the system, <persons>-man, <days>-working days."
 
 Output
-- Default is DOCX. The generator will first try your template at `backend/files/templates/Quote Anti-Heeling MAL.docx` (preferred),
-  then `quote_anti_heeling.docx`, then the first `.docx` in that folder. If no template is available, it falls back to a
+- Default is DOCX. The generator will first try your template at `backend/files/templates/Quote Anti-Heeling MAL.docx` (preferred) or `Quote MAL.docx`.
+  Then `quote_anti_heeling.docx` / `quote.docx`, then the first `.docx` in that folder. If no template is available, it falls back to a
   programmatic DOCX; if that fails, to TXT. The table shows Item, Qty, Unit, Description and a footer `Price: <CURRENCY> <TOTAL>`.
 
 Extensibility
-- Add mappers for valves, controls, piping, installation, etc.
-- Add pricing to items when available, or compute totals from line items.
+- Add mappers for additional components (piping, install, services).
+- Add pricing to items and compute totals from line items when available.
 
 Backward Compatibility
-- All changes are additive. Existing endpoints and file output remain.
-- Legacy `products` API is transparently supported via `project_line_items`.
+- Additive changes only; existing endpoints and file outputs remain.
+- Legacy `products` API remains usable; `project_line_items` is preferred going forward.

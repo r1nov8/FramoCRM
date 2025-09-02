@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import type { Project, Company, Contact, TeamMember, ProjectFile } from '../types';
 import type { Task, Activity } from '../types';
 import { INITIAL_COMPANIES } from '../constants';
@@ -64,7 +64,7 @@ const stages = [ProjectStage.LEAD, ProjectStage.OPP, ProjectStage.RFQ, ProjectSt
 
 export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, companies, contacts, teamMembers, onEditProject, onUploadFiles, onDeleteFile, onOpenHPUSizing, onOpenEstimateCalculator, isActive = false, onOpenActivity }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity, saveProjectEstimate, generateProjectQuote, updateProjectFields, projectMembersByProject, addProjectMember, removeProjectMember } = useData();
+    const { tasksByProject, handleAddTask, handleUpdateTask, handleDeleteTask, teamMembers: dataTeamMembers, activitiesByProject, handleAddActivity, saveProjectEstimate, generateProjectQuote, generateProjectQuotePdf, updateProjectFields, projectMembersByProject, addProjectMember, removeProjectMember, reloadProjectMembers, reloadTeamMembers } = useData();
     const projectMembers = projectMembersByProject?.[project.id] || [];
     const [newMemberId, setNewMemberId] = useState<string>('');
     const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -75,10 +75,31 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
         companies.find(c => String(c.id) === String(id)) ||
         INITIAL_COMPANIES.find(c => String(c.id) === String(id));
     const findContact = (id: string) => contacts.find(c => c.id === id);
-    const salesRep = project.salesRepId
-        ? (dataTeamMembers.find(tm => String(tm.id) === String(project.salesRepId))
-            || teamMembers.find(tm => String(tm.id) === String(project.salesRepId)))
-        : undefined;
+    // Ensure team and members for this project are loaded (don’t rely only on global selected project)
+    useEffect(() => {
+        try {
+            if (!dataTeamMembers || dataTeamMembers.length === 0) {
+                reloadTeamMembers?.();
+            }
+        } catch {}
+        try {
+            const current = projectMembersByProject?.[project.id];
+            if (!current || current.length === 0) {
+                reloadProjectMembers?.(project.id);
+            }
+        } catch {}
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [project.id]);
+
+    const salesRep = useMemo(() => {
+        if (!project.salesRepId) return undefined;
+        const idStr = String(project.salesRepId);
+        return (
+            projectMembers.find(tm => String(tm.id) === idStr)
+            || dataTeamMembers.find(tm => String(tm.id) === idStr)
+            || teamMembers.find(tm => String(tm.id) === idStr)
+        );
+    }, [project.salesRepId, projectMembers, dataTeamMembers, teamMembers]);
 
     const shipyard = findCompany(project.shipyardId);
     const vesselOwner = project.vesselOwnerId ? findCompany(project.vesselOwnerId) : undefined;
@@ -134,12 +155,62 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
         return null;
     }, [project.id, project.flowDescription, project.flowCapacityM3h, project.flowMwc, project.flowPowerKw]);
 
+    // Quick-compare state
+    const [compareOpen, setCompareOpen] = useState(false);
+    const [compareInfo, setCompareInfo] = useState<{ prev: number; curr: number; priceDiff: number; flowDelta: string[] } | null>(null);
+
+    // Compute a compact hash of relevant estimator parts
+    const summarizeEstimator = (obj: any) => {
+        const data = obj || {};
+        const price = Number(data?.pricePerVessel || 0);
+        const flow = data?.flow || {};
+        const cap = flow?.capacityM3h ?? null;
+        const mwc = flow?.mwc ?? null;
+        const kw = flow?.powerKw ?? null;
+        const desc = typeof flow?.description === 'string' ? flow.description.trim() : '';
+        return { price, flow: { cap, mwc, kw, desc } };
+    };
+
+    const diffFlow = (a: any, b: any): string[] => {
+        const lines: string[] = [];
+        const pairs: Array<[string, any, any, (v:any)=>string]> = [
+            ['Capacity (m3/h)', a?.cap, b?.cap, (v)=> v==null? '—' : String(v)],
+            ['Head (mwc)', a?.mwc, b?.mwc, (v)=> v==null? '—' : String(v)],
+            ['Power (kW)', a?.kw, b?.kw, (v)=> v==null? '—' : String(v)],
+            ['Description', a?.desc, b?.desc, (v)=> (v||'').toString()]
+        ];
+        for (const [label, av, bv, fmt] of pairs) {
+            const aStr = fmt(av);
+            const bStr = fmt(bv);
+            if (aStr !== bStr) lines.push(`${label}: ${aStr} → ${bStr}`);
+        }
+        return lines;
+    };
+
     const handleGenerateQuote = async () => {
         try {
             // Try to read estimator state saved by the modal
             const key = `estimator_state_${project.id}`;
             let payload: any = null;
             try { const raw = localStorage.getItem(key); if (raw) payload = JSON.parse(raw); } catch {}
+            // Also look for a previous snapshot to quick-compare
+            let prev: any = null;
+            try { const raw = localStorage.getItem(`${key}_prev`); if (raw) prev = JSON.parse(raw); } catch {}
+            const currSummary = summarizeEstimator(payload || {});
+            const prevSummary = summarizeEstimator(prev || {});
+            if (payload) {
+                // Persist current as prev snapshot for next time
+                try { localStorage.setItem(`${key}_prev`, JSON.stringify(payload)); } catch {}
+            }
+            // If we have a previous snapshot, show a tiny diff preview first
+            if (prev && payload) {
+                const priceDiff = Number(currSummary.price || 0) - Number(prevSummary.price || 0);
+                const flowDelta = diffFlow(prevSummary.flow, currSummary.flow);
+                setCompareInfo({ prev: Number(prevSummary.price||0), curr: Number(currSummary.price||0), priceDiff, flowDelta });
+                setCompareOpen(true);
+                // Defer actual generation until user confirms
+                return;
+            }
             // If flow info exists in estimator payload, patch project first so backend has it when composing the quote
             if (payload && payload.flow) {
                 const f = payload.flow as any;
@@ -164,6 +235,29 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
         }
     };
 
+    const handleGenerateQuotePdf = async () => {
+        try {
+            const key = `estimator_state_${project.id}`;
+            let payload: any = null;
+            try { const raw = localStorage.getItem(key); if (raw) payload = JSON.parse(raw); } catch {}
+            if (payload && payload.flow) {
+                const f = payload.flow as any; const patch: any = {};
+                if (f.description) patch.flowDescription = f.description;
+                if (f.capacityM3h != null) patch.flowCapacityM3h = Number(f.capacityM3h);
+                if (f.mwc != null) patch.flowMwc = Number(f.mwc);
+                if (f.powerKw != null) patch.flowPowerKw = Number(f.powerKw);
+                if (Object.keys(patch).length) { try { await updateProjectFields(project.id, patch); } catch {} }
+            }
+            if (payload && typeof payload === 'object') {
+                try { await saveProjectEstimate(project.id, 'anti_heeling', payload); } catch {}
+            }
+            const file = await generateProjectQuotePdf(project.id, 'anti_heeling');
+            if (file) alert('PDF quote generated and added to Documents.');
+        } catch (e:any) {
+            alert(`Failed to generate PDF quote: ${e?.message || 'Unknown error'}`);
+        }
+    };
+
 
     const handleFileUploadClick = () => {
         fileInputRef.current?.click();
@@ -178,26 +272,10 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     const handleFileDownload = async (file: ProjectFile) => {
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${window.location.origin}/api/project-files/${file.id}/download`, {
+            const apiBase = (window as any).API_URL || `${window.location.origin}`;
+            const res = await fetch(`${apiBase}/api/project-files/${file.id}/download`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {}
             });
-            // If the app is fronted by a different origin backend, fall back to API_URL
-            if (!res.ok && (window as any).API_URL) {
-                const res2 = await fetch(`${(window as any).API_URL}/api/project-files/${file.id}/download`, {
-                    headers: token ? { Authorization: `Bearer ${token}` } : {}
-                });
-                if (!res2.ok) throw new Error('Download failed');
-                const blob = await res2.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = file.name;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(url);
-                return;
-            }
             if (!res.ok) throw new Error('Download failed');
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
@@ -281,6 +359,10 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                     {salesRep.initials}
                                 </div>
                             </div>
+                        ) : project.salesRepId ? (
+                            <div className="flex items-center justify-end mt-2">
+                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Loading…</span>
+                            </div>
                         ) : (
                             <div className="flex items-center justify-end mt-2">
                                 <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Unassigned</span>
@@ -309,8 +391,15 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                 <div className="lg:col-span-2 flex flex-col gap-6">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                        <h2 className="text-xl font-semibold mb-4">Products & Specifications</h2>
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                                                <div className="flex items-start justify-between mb-4">
+                                                    <h2 className="text-xl font-semibold">Products & Specifications</h2>
+                                                    <button
+                                                        onClick={onOpenEstimateCalculator}
+                                                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                                        title="Edit in Estimation Calculator"
+                                                    >Edit in estimator</button>
+                                                </div>
                         <div className="space-y-3">
                             <div className="text-sm text-gray-600 dark:text-gray-400">System Type</div>
                             <div className="font-semibold text-gray-800 dark:text-gray-200 mb-3">{project.projectType || '—'}</div>
@@ -356,18 +445,83 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                                     <div className="flex-1 min-w-[200px] p-4 border dark:border-gray-700 rounded-lg flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">
                                         <div>
                                             <h3 className="font-semibold flex items-center"><FileDocIcon className="w-5 h-5 mr-2 text-gray-500" /> Generate Quote</h3>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Save estimator and create a draft quote.</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Review last changes, save estimator and create a draft quote.</p>
                                         </div>
-                                        <button 
-                                            onClick={handleGenerateQuote}
-                                            className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-gray-800"
-                                        >
-                                            Generate
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={handleGenerateQuote}
+                                                className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-gray-800"
+                                            >
+                                                Generate
+                                            </button>
+                                            <button 
+                                                onClick={handleGenerateQuotePdf}
+                                                className="px-3 py-1.5 text-sm font-medium text-white bg-rose-600 rounded-md hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 dark:focus:ring-offset-gray-800"
+                                                title="Generate PDF via HTML template"
+                                            >
+                                                PDF
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-[200px] p-4 border dark:border-gray-700 rounded-lg flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">
                                     <div>
+                                    {/* Quick Compare Modal (lightweight) */}
+                                    {compareOpen && compareInfo && (
+                                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                                            <div className="bg-white dark:bg-gray-800 rounded-md shadow-lg w-full max-w-md p-4">
+                                                <h3 className="text-lg font-semibold mb-2">Quick compare</h3>
+                                                <div className="text-sm space-y-2">
+                                                    <div className="flex justify-between">
+                                                        <span>Price per vessel</span>
+                                                        <span className="font-medium">{compareInfo.prev.toLocaleString()} → {compareInfo.curr.toLocaleString()} ({compareInfo.priceDiff >= 0 ? '+' : ''}{compareInfo.priceDiff.toLocaleString()})</span>
+                                                    </div>
+                                                    {compareInfo.flowDelta.length > 0 ? (
+                                                        <div>
+                                                            <div className="text-gray-600 dark:text-gray-400">Spec changes</div>
+                                                            <ul className="list-disc pl-5 mt-1 text-gray-800 dark:text-gray-200">
+                                                                {compareInfo.flowDelta.map((l, i) => (<li key={i}>{l}</li>))}
+                                                            </ul>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-gray-600 dark:text-gray-400">No spec changes</div>
+                                                    )}
+                                                </div>
+                                                <div className="flex justify-end gap-2 mt-4">
+                                                    <button
+                                                        className="px-3 py-1.5 text-sm rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                                        onClick={() => { setCompareOpen(false); }}
+                                                    >Cancel</button>
+                                                    <button
+                                                        className="px-3 py-1.5 text-sm rounded-md bg-green-600 text-white hover:bg-green-700"
+                                                        onClick={async ()=>{
+                                                            setCompareOpen(false);
+                                                            // Re-run generation flow quickly
+                                                            try {
+                                                                const key = `estimator_state_${project.id}`;
+                                                                let payload: any = null; try { const raw = localStorage.getItem(key); if (raw) payload = JSON.parse(raw); } catch {}
+                                                                if (payload && payload.flow) {
+                                                                    const f = payload.flow as any; const patch: any = {};
+                                                                    if (f.description) patch.flowDescription = f.description;
+                                                                    if (f.capacityM3h != null) patch.flowCapacityM3h = Number(f.capacityM3h);
+                                                                    if (f.mwc != null) patch.flowMwc = Number(f.mwc);
+                                                                    if (f.powerKw != null) patch.flowPowerKw = Number(f.powerKw);
+                                                                    if (Object.keys(patch).length) { try { await updateProjectFields(project.id, patch); } catch {} }
+                                                                }
+                                                                if (payload && typeof payload === 'object') {
+                                                                    try { await saveProjectEstimate(project.id, 'anti_heeling', payload); } catch {}
+                                                                }
+                                                                const file = await generateProjectQuote(project.id, 'anti_heeling');
+                                                                if (file) alert('Quote generated and added to Documents.');
+                                                            } catch (e:any) {
+                                                                alert(`Failed to generate quote: ${e?.message || 'Unknown error'}`);
+                                                            }
+                                                        }}
+                                                    >Generate now</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                         <h3 className="font-semibold flex items-center"><CalculatorIcon className="w-5 h-5 mr-2 text-gray-500" /> HPU Sizing</h3>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Calculate hydraulic power unit size.</p>
                                     </div>
@@ -582,7 +736,21 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                             </div>
                         </div>
                         <ul className="space-y-2">
-                            {projectMembers.length === 0 && <li className="text-sm text-gray-500">No members assigned.</li>}
+                            {projectMembers.length === 0 ? (
+                                salesRep ? (
+                                    <li className="flex items-center justify-between p-2 rounded border dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">{salesRep.initials}</div>
+                                            <div>
+                                                <div className="text-sm font-medium">{salesRep.first_name} {salesRep.last_name}</div>
+                                                {salesRep.jobTitle && <div className="text-xs text-gray-500">{salesRep.jobTitle}</div>}
+                                            </div>
+                                        </div>
+                                    </li>
+                                ) : (
+                                    <li className="text-sm text-gray-500">No members assigned.</li>
+                                )
+                            ) : null}
                             {projectMembers.map(m => (
                                 <li key={m.id} className="flex items-center justify-between p-2 rounded border dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
                                     <div className="flex items-center gap-3">
@@ -602,6 +770,9 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                             ))}
                         </ul>
                     </div>
+
+                    {/* Quote Items (read-only) */}
+                    <QuoteItems projectId={project.id} />
 
                      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                         <h2 className="text-xl font-semibold mb-4 flex items-center"><PencilIcon className="w-6 h-6 mr-2 text-gray-500" /> Notes</h2>
@@ -675,13 +846,9 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
                         </div>
                     )}
                                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                                                 <div className="flex items-center justify-between mb-4">
-                                                     <h2 className="text-xl font-semibold">Involved Companies</h2>
-                                                     <button
-                                                         onClick={() => onOpenActivity(project.id)}
-                                                         className="px-3 py-1.5 text-sm rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
-                                                     >Activity</button>
-                                                 </div>
+                                                                     <div className="flex items-center justify-between mb-4">
+                                                                         <h2 className="text-xl font-semibold">Involved Companies</h2>
+                                                                     </div>
                          <div className="space-y-4">
                             {shipyard && <CompanyCard company={shipyard} />}
                             {vesselOwner && <CompanyCard company={vesselOwner} />}
@@ -693,5 +860,55 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project, compani
     </div>
     {/* ActivitySlideOver is rendered globally in App */}
     </>
+    );
+};
+
+// Lightweight, inline read-only items viewer
+const QuoteItems: React.FC<{ projectId: string }> = ({ projectId }) => {
+    const { reloadProjects } = useData(); // available for future refresh triggers
+    const [loading, setLoading] = useState<boolean>(false);
+    const [items, setItems] = useState<Array<{ id: string; quantity?: number | null; unit?: string | null; notes?: string | null }>>([]);
+
+    useEffect(() => {
+        let mounted = true;
+    const run = async () => {
+            setLoading(true);
+            try {
+                const apiBase = (window as any).API_URL || `${window.location.origin}`;
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${apiBase}/api/projects/${projectId}/line-items`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                if (!res.ok) throw new Error('Failed to load items');
+                const data = await res.json();
+                if (mounted && Array.isArray(data)) {
+                    setItems(data.map((d:any) => ({ id: String(d.id), quantity: d.quantity ?? null, unit: d.unit ?? 'of', notes: d.notes ?? '' })));
+                }
+            } catch (e) {
+                // Silent in UI; section remains minimal
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        };
+        run();
+        return () => { mounted = false; };
+    }, [projectId]);
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+            <h2 className="text-xl font-semibold mb-4">Quote Items</h2>
+            {loading && <p className="text-sm text-gray-500">Loading…</p>}
+            {!loading && (!items || items.length === 0) && (
+                <p className="text-sm text-gray-500">No items yet. Generate a quote to populate AUTO items.</p>
+            )}
+            {!loading && items && items.length > 0 && (
+                <ul className="space-y-2">
+                    {items.map((it, idx) => (
+                        <li key={it.id} className="p-2 rounded border dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+                            <div className="text-sm font-medium">{idx + 1}. {it.quantity ?? ''} {it.unit || 'of'}</div>
+                            {it.notes && <div className="text-xs text-gray-600 dark:text-gray-300 mt-1">{String(it.notes).replace(/^AUTO:\s*/i, '')}</div>}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 };

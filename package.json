@@ -7,7 +7,9 @@
   "dev": "vite",
   "prebuild": "node scripts/gen-build-info.cjs",
   "build": "vite build",
-    "preview": "vite preview"
+  "preview": "vite preview",
+  "health": "node scripts/health-check.cjs",
+  "smoke": "npm run -s health"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Header } from './components/Header';
 import { ExitDoorIcon, UsersIcon, BellIcon } from './components/icons';
 import { IconSidebar } from './components/IconSidebar';
+import MarketIntelPage from './components/MarketIntelPage';
+import LeadListPage from './components/LeadListPage';
 import FilesBrowser from './components/FilesBrowser';
 import { Dashboard } from './components/Dashboard';
 import { ProjectPipelineView } from './components/ProjectPipelineView';
@@ -18,7 +20,7 @@ import { CompanyType, ProjectType } from './types';
 import { useData } from './context/DataContext';
 import ActivitySlideOver from './components/ActivitySlideOver';
 
-type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files';
+type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files' | 'intel' | 'leads';
 
 interface AppProps {
     user: { name: string; initials: string };
@@ -137,6 +139,8 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
     const pageTitle = useMemo(() => {
         if (activeView === 'pipeline') return 'Project Pipeline';
         if (activeView === 'companyInfo') return 'Company Info';
+        if (activeView === 'intel') return 'Market Intelligence';
+        if (activeView === 'leads') return 'Leads';
         return 'Dashboard';
     }, [activeView]);
 
@@ -146,6 +150,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
             <div className="flex flex-col flex-1 overflow-hidden pt-20"> {/* pt-20 for header height */}
                 <Header
                     title={pageTitle}
+                    onManageTeamClick={() => setIsManageTeamModalOpen(true)}
                     rightContent={
                         <div className="flex items-center gap-2">
                                                                                     <div className="relative">
@@ -234,6 +239,16 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                         <CompanyInfoPage />
                     </main>
                 )}
+                {activeView === 'intel' && (
+                    <main className="flex-1 overflow-y-auto p-0 pl-2">
+                        <MarketIntelPage />
+                    </main>
+                )}
+                {activeView === 'leads' && (
+                    <main className="flex-1 overflow-y-auto p-0 pl-2">
+                        <LeadListPage />
+                    </main>
+                )}
                 {activeView === 'files' && (
                     <main className="flex-1 overflow-y-auto p-0">
                         <FilesBrowser />
@@ -300,10 +315,11 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                     onClose={() => setIsAddCompanyModalOpen(false)}
                 />
             )}
-            {isAddContactModalOpen && (
+        {isAddContactModalOpen && (
                 <AddContactModal
                     onAddContact={handleAddContactAndCloseModal}
                     onClose={() => setIsAddContactModalOpen(false)}
+            companies={companies}
                 />
             )}
             {isManageTeamModalOpen && (

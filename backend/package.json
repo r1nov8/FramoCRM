@@ -20,7 +20,8 @@
   "pg": "^8.11.5",
     "docx": "^8.5.0",
     "docxtemplater": "^3.45.2",
-    "pizzip": "^3.1.7"
+  "pizzip": "^3.1.7",
+  "puppeteer": "^23.7.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

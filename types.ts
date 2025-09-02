@@ -168,3 +168,35 @@ export interface Project {
     flowPowerKw?: number;
     files: ProjectFile[];
 }
+
+// New lightweight types for Market Intelligence and Leads
+export interface MarketIntel {
+    id: string;
+    createdAt?: string;
+    source?: string | null; // Tradewinds | ship.energy | Clarksons | Other
+    url?: string | null;
+    summary?: string | null;
+    region?: string | null;
+    fuelType?: FuelType | string | null;
+    vesselType?: string | null;
+    vesselsCount?: number | null;
+    notes?: string | null;
+    validatedByOffice?: 'CN' | 'KR' | 'JP' | 'None' | string | null;
+    validationNotes?: string | null;
+    status?: 'Open' | 'Promoted' | 'Discarded' | string;
+    discardedReason?: string | null;
+}
+
+export interface Lead {
+    id: string;
+    createdAt?: string;
+    vesselType?: string | null;
+    fuelType?: FuelType | string | null;
+    shipyardId?: string | null;
+    ownerId?: string | null;
+    region?: string | null;
+    vesselsCount?: number | null;
+    sourceIntelId?: string | null;
+    status?: 'Open' | 'Converted' | 'Lost' | string;
+    ownerUserId?: string | null;
+}
