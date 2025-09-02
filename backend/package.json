@@ -5,10 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon index.js",
-  "start": "node index.js",
-  "migrate": "node scripts/run_migrations.js",
-  "cleanup:companies": "node scripts/cleanup_companies.js",
-  "diag:project-types": "node scripts/report_project_types.js"
+    "start": "node index.js",
+    "migrate": "node scripts/run_migrations.js",
+    "etl:clone": "node scripts/etl_clone_core.js",
+    "etl:schema": "node scripts/etl_clone_schema.js",
+    "seed:docnums": "node scripts/seed_doc_numbers.js",
+    "cleanup:companies": "node scripts/cleanup_companies.js",
+    "diag:project-types": "node scripts/report_project_types.js",
+  "cleanup:drop-public": "node scripts/cleanup_drop_public.js",
+  "verify:schema-counts": "node scripts/compare_schema_counts.js",
+  "backup:public": "node scripts/backup_public_to_schema.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -17,11 +23,11 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-  "pg": "^8.11.5",
+    "pg": "^8.11.5",
     "docx": "^8.5.0",
     "docxtemplater": "^3.45.2",
-  "pizzip": "^3.1.7",
-  "puppeteer": "^23.7.1"
+    "pizzip": "^3.1.7",
+    "puppeteer": "^23.7.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

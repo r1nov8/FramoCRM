@@ -7,6 +7,7 @@ const LeadListPage: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
   const [convertingId, setConvertingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<Partial<Lead>>({ vesselType: '', fuelType: '', region: '', vesselsCount: 1, status: 'Open' });
+  const vesselTypeHints = ['OSV', 'PSV', 'AHTS', 'Fishing', 'RoRo', 'Container', 'Bulker', 'Product Tanker', 'Shuttle Tanker', 'FPSO', 'Cruise', 'Ferry'];
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const authHeaders = () => {
     const t = localStorage.getItem('token');
@@ -84,7 +85,10 @@ const LeadListPage: React.FC = () => {
       <div className="bg-white dark:bg-gray-800 rounded-md border dark:border-gray-700 p-3 mb-3">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <input className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Fuel Type" value={form.fuelType as string || ''} onChange={e=>setForm(f=>({...f, fuelType:e.target.value}))} />
-          <input className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Vessel Type" value={form.vesselType || ''} onChange={e=>setForm(f=>({...f, vesselType:e.target.value}))} />
+          <input list="lead-vessel-type-hints" className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Vessel Type" value={form.vesselType || ''} onChange={e=>setForm(f=>({...f, vesselType:e.target.value}))} />
+          <datalist id="lead-vessel-type-hints">
+            {vesselTypeHints.map(v => (<option key={v} value={v} />))}
+          </datalist>
           <input className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Region" value={form.region || ''} onChange={e=>setForm(f=>({...f, region:e.target.value}))} />
           <input type="number" className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="# Vessels" value={form.vesselsCount || 1} onChange={e=>setForm(f=>({...f, vesselsCount:Number(e.target.value)||1}))} />
         </div>

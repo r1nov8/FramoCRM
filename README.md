@@ -69,3 +69,83 @@ Verification
 - Backend health: `GET /api/contacts`
 - Migration check: `GET /api/diagnostics/project-type-counts`
 # Force rebuild Sun Aug 24 16:37:41 CEST 2025
+
+## Blue/Green DB Staging and ETL (safe rollout)
+
+Use a green database to validate new schema and features without touching production until ready. The backend ships helper scripts.
+
+Prereqs
+
+- `TARGET_DATABASE_URL` (new/green). If `SOURCE_DATABASE_URL` is not set, the ETL uses `DATABASE_URL` from `backend/.env` as the source automatically.
+
+Steps (Option A: separate DB)
+
+1) Apply migrations on green
+
+- In `/backend`, set `DATABASE_URL` to the green DB (export or in `backend/.env`) and run:
+   - npm run migrate
+
+2) Clone core data (read-only from live → green)
+
+- In `/backend`, run:
+   - TARGET_DATABASE_URL=postgres://… npm run etl:clone
+   - (optional) Override source: SOURCE_DATABASE_URL=postgres://… TARGET_DATABASE_URL=postgres://… npm run etl:clone
+
+3) Seed atomic document numbers (optional)
+
+- In `/backend`, run:
+   - DATABASE_URL=postgres://… npm run seed:docnums
+
+4) Point a staging backend at green and verify
+
+- Set backend `.env` DATABASE_URL to green. Start backend and frontend. Validate lead conversion (OPP/PRJ numbers), estimator save, and dashboard reports.
+
+5) Cutover
+
+- Update production backend DATABASE_URL to green. Keep old DB as rollback for a window.
+
+Notes
+
+- ETL inserts only when the target table is empty; it won’t overwrite.
+- Number allocation is transactional (table `doc_numbers`) with a unique index on `projects.opportunity_number`.
+
+### Option B: separate schema (no new DB required)
+
+If your provider limits the number of databases, you can use a separate schema in the same Postgres instance to stage green changes.
+
+1) Create schema and run migrations into it
+
+- In `/backend`, run migrations with a schema override:
+   - DB_SCHEMA=green npm run migrate
+
+2) Point a staging backend at the same DB but with the green schema
+
+- Backend env:
+   - DATABASE_URL = your existing Postgres URL
+   - DB_SCHEMA = green
+
+3) Validate end-to-end (the staging backend will see the green tables via search_path)
+
+4) Cutover by switching the production backend to DB_SCHEMA=green
+
+Notes
+
+- This avoids creating a new DB; you can switch schemas quickly and roll back by resetting DB_SCHEMA=public.
+
+Schema-to-schema ETL (optional)
+
+- Copy existing data from public → green within the same DB:
+   - In `/backend` (uses DATABASE_URL):
+      - SOURCE_SCHEMA=public TARGET_SCHEMA=green npm run etl:schema
+
+   Cleanup: remove old schema (after successful cutover)
+
+   - Preconditions:
+      - Production backend is running with DB_SCHEMA=green
+      - No active connections are using the old schema
+      - Backups retained or snapshot taken
+   - Then connect with psql (or your DB console) and run:
+      - DROP SCHEMA public CASCADE;
+      - CREATE SCHEMA public; -- optional, if you want to keep a clean empty public
+      - GRANT USAGE ON SCHEMA public TO your_db_user; -- if needed
+      - Note: If you prefer to keep public, you can instead drop individual old tables.

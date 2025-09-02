@@ -154,12 +154,14 @@ const getInitialLineItems = (isAntiHeeling: boolean): LineItem[] => {
 
 export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = ({ onClose, project, companies, teamMembers, onUpdateProjectPrice }) => {
     const isAH = project.projectType === ProjectType.ANTI_HEELING;
-    const { updateProjectFields } = useData();
+    const { updateProjectFields, saveProjectEstimate } = useData();
 
     const [lineItems, setLineItems] = useState<LineItem[]>(getInitialLineItems(!!isAH));
     const [showExtras, setShowExtras] = useState(false);
     const [usdRate, setUsdRate] = useState(8.7);
     const [eurRate, setEurRate] = useState(11.7);
+    const [jpyRate, setJpyRate] = useState(0.07);
+    const [krwRate, setKrwRate] = useState(0.0076);
     const [adminPercent, setAdminPercent] = useState(40);
     const [agentCommissionPercent, setAgentCommissionPercent] = useState(4.0);
     const [profitMarginPercent, setProfitMarginPercent] = useState(50.0);
@@ -227,6 +229,8 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                 bottomPercent,
                 usdRate,
                 eurRate,
+                jpyRate,
+                krwRate,
                 extraCommissioningDays,
                 comments,
                 shippingRegion,
@@ -260,6 +264,8 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                 if (typeof s.shippingRegion === 'string') setShippingRegion(s.shippingRegion);
                 if (typeof s.shippingAutoMap === 'boolean') setShippingAutoMap(s.shippingAutoMap);
                 if (typeof s.startupLocation === 'string') setStartupLocation(s.startupLocation);
+                if (typeof s.jpyRate === 'number') setJpyRate(s.jpyRate);
+                if (typeof s.krwRate === 'number') setKrwRate(s.krwRate);
                 if (s.flow && typeof s.flow === 'object') {
                     const f = s.flow as any;
                     if (f.capacityM3h !== undefined) setFlowCapacityM3h(f.capacityM3h === null ? '' : f.capacityM3h);
@@ -659,20 +665,30 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
     const salesPriceEUR = useMemo(() => {
         return salesPriceNOK / eurRate;
     }, [salesPriceNOK, eurRate]);
+    const salesPriceJPY = useMemo(() => {
+        return salesPriceNOK / jpyRate;
+    }, [salesPriceNOK, jpyRate]);
+    const salesPriceKRW = useMemo(() => {
+        return salesPriceNOK / krwRate;
+    }, [salesPriceNOK, krwRate]);
     const bottomAmount = useMemo(() => totalSelfCost * (bottomPercent / 100), [totalSelfCost, bottomPercent]);
     const bottomPriceNOK = useMemo(() => totalSelfCost + bottomAmount, [totalSelfCost, bottomAmount]);
 
     const targetPriceDisplay = useMemo(() => {
         if (project.currency === Currency.USD) return fmtCurrency(salesPriceUSD, 'en-US', 'USD');
         if (project.currency === Currency.EUR) return fmtCurrency(salesPriceEUR, 'de-DE', 'EUR');
+        if (project.currency === Currency.JPY) return fmtCurrency(salesPriceJPY, 'ja-JP', 'JPY');
+        if (project.currency === Currency.KRW) return fmtCurrency(salesPriceKRW, 'ko-KR', 'KRW');
         return fmtCurrency(salesPriceNOK, 'nb-NO', 'NOK');
-    }, [project.currency, salesPriceUSD, salesPriceEUR, salesPriceNOK]);
+    }, [project.currency, salesPriceUSD, salesPriceEUR, salesPriceJPY, salesPriceKRW, salesPriceNOK]);
 
     const bottomPriceDisplay = useMemo(() => {
         if (project.currency === Currency.USD) return fmtCurrency(bottomPriceNOK / usdRate, 'en-US', 'USD');
         if (project.currency === Currency.EUR) return fmtCurrency(bottomPriceNOK / eurRate, 'de-DE', 'EUR');
+        if (project.currency === Currency.JPY) return fmtCurrency(bottomPriceNOK / jpyRate, 'ja-JP', 'JPY');
+        if (project.currency === Currency.KRW) return fmtCurrency(bottomPriceNOK / krwRate, 'ko-KR', 'KRW');
         return fmtCurrency(bottomPriceNOK, 'nb-NO', 'NOK');
-    }, [project.currency, bottomPriceNOK, usdRate, eurRate]);
+    }, [project.currency, bottomPriceNOK, usdRate, eurRate, jpyRate, krwRate]);
     
     const pumpItem = lineItems.find(item => item.isPump);
     const trunkItem = lineItems.find(item => item.isTrunk);
@@ -706,9 +722,47 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
         const selfCostInCurrency = (() => {
             if (currency === Currency.USD) return totalSelfCost / (usdRate || 1);
             if (currency === Currency.EUR) return totalSelfCost / (eurRate || 1);
+            if (currency === Currency.JPY) return totalSelfCost / (jpyRate || 1);
+            if (currency === Currency.KRW) return totalSelfCost / (krwRate || 1);
             return totalSelfCost; // NOK
         })();
         onUpdateProjectPrice(amount, currency, selfCostInCurrency);
+
+        // Persist lightweight estimator snapshot (including FX) to backend estimates
+        try {
+            const payload = {
+                adminPercent,
+                agentCommissionPercent,
+                profitMarginPercent,
+                bottomPercent,
+                usdRate,
+                eurRate,
+                jpyRate,
+                krwRate,
+                extras: lineItems,
+                shippingRegion,
+                startupLocation,
+                extraCommissioningDays,
+                comments,
+                totals: {
+                    equipmentCost,
+                    adminAmount,
+                    startupCost,
+                    shippingCost,
+                    extraCommissioningCost,
+                    totalSelfCost,
+                    profitAmount,
+                    salesPriceNOK,
+                },
+                flow: {
+                    capacityM3h: flowCapacityM3h === '' ? null : flowCapacityM3h,
+                    mwc: flowMwc === '' ? null : flowMwc,
+                    powerKw: flowPowerKw === '' ? null : flowPowerKw,
+                    description: flowDescription || null,
+                }
+            };
+            saveProjectEstimate(String(project.id), isAH ? 'anti_heeling' : 'fuel_transfer', payload).catch(()=>{});
+        } catch {}
     };
 
     // ... formatting helpers are defined at module scope
@@ -1561,6 +1615,30 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
                                                {fmtCurrency(salesPriceEUR, 'de-DE', 'EUR')}
                                             </div>
                                             <button onClick={() => handleUseThisPrice(salesPriceEUR, Currency.EUR)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
+                                        </div>
+                                    );
+                                } else if (target === Currency.JPY) {
+                                    return (
+                                        <div className="flex items-center">
+                                            <span className="w-48">{label('JPY')}</span>
+                                            <span className="w-16">Rate:</span>
+                                            <input type="number" step="0.0001" value={jpyRate} onChange={e => setJpyRate(parseFloat(e.target.value))} className="w-24 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
+                                            <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
+                                               {fmtCurrency(salesPriceJPY, 'ja-JP', 'JPY')}
+                                            </div>
+                                            <button onClick={() => handleUseThisPrice(salesPriceJPY, Currency.JPY)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
+                                        </div>
+                                    );
+                                } else if (target === Currency.KRW) {
+                                    return (
+                                        <div className="flex items-center">
+                                            <span className="w-48">{label('KRW')}</span>
+                                            <span className="w-16">Rate:</span>
+                                            <input type="number" step="0.0001" value={krwRate} onChange={e => setKrwRate(parseFloat(e.target.value))} className="w-24 p-1 text-right bg-transparent border rounded-md dark:border-gray-600" />
+                                            <div className="ml-4 p-2 font-bold text-right flex-1 bg-gray-200 dark:bg-gray-700 rounded-md">
+                                               {fmtCurrency(salesPriceKRW, 'ko-KR', 'KRW')}
+                                            </div>
+                                            <button onClick={() => handleUseThisPrice(salesPriceKRW, Currency.KRW)} className="ml-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Use this Price</button>
                                         </div>
                                     );
                                 }

@@ -38,6 +38,7 @@ const MarketIntelPage: React.FC = () => {
   };
 
   const resetForm = () => { setForm({ source: '', url: '', summary: '', region: '', fuelType: '', vesselType: '', vesselsCount: 1, notes: '' }); setEditingId(null); };
+  const vesselTypeHints = ['OSV', 'PSV', 'AHTS', 'Fishing', 'RoRo', 'Container', 'Bulker', 'Product Tanker', 'Shuttle Tanker', 'FPSO', 'Cruise', 'Ferry'];
 
   const save = async () => {
     if (!canPost) { alert('Please log in to add intel.'); return; }
@@ -92,7 +93,10 @@ const MarketIntelPage: React.FC = () => {
           <input className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="URL" value={form.url||''} onChange={e=>setForm(f=>({...f, url:e.target.value}))} />
           <input className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Region" value={form.region||''} onChange={e=>setForm(f=>({...f, region:e.target.value}))} />
           <input className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Fuel Type" value={form.fuelType as string||''} onChange={e=>setForm(f=>({...f, fuelType:e.target.value}))} />
-          <input className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Vessel Type" value={form.vesselType||''} onChange={e=>setForm(f=>({...f, vesselType:e.target.value}))} />
+          <input list="vessel-type-hints" className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Vessel Type" value={form.vesselType||''} onChange={e=>setForm(f=>({...f, vesselType:e.target.value}))} />
+          <datalist id="vessel-type-hints">
+            {vesselTypeHints.map(v => (<option key={v} value={v} />))}
+          </datalist>
           <input type="number" className="px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="# Vessels" value={form.vesselsCount||1} onChange={e=>setForm(f=>({...f, vesselsCount: Number(e.target.value)||1}))} />
           <input className="col-span-2 md:col-span-3 px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Summary" value={form.summary||''} onChange={e=>setForm(f=>({...f, summary:e.target.value}))} />
           <input className="col-span-2 md:col-span-3 px-2 py-1 rounded border dark:border-gray-700 bg-white dark:bg-gray-900" placeholder="Notes" value={form.notes||''} onChange={e=>setForm(f=>({...f, notes:e.target.value}))} />

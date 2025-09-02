@@ -28,6 +28,13 @@ async function run() {
   const pool = new Pool({ connectionString: databaseUrl, ssl: databaseUrl.includes('render.com') ? { rejectUnauthorized: false } : false });
   const client = await pool.connect();
   try {
+    const schema = process.env.MIGRATE_SCHEMA || process.env.DB_SCHEMA || process.env.SCHEMA;
+    if (schema && schema !== 'public') {
+      if (!/^[_a-zA-Z][_a-zA-Z0-9]*$/.test(schema)) throw new Error('Invalid schema name');
+      await client.query(`CREATE SCHEMA IF NOT EXISTS "${schema.replace(/"/g, '""')}"`);
+      await client.query(`SET search_path TO "${schema.replace(/"/g, '""')}", public`);
+      console.log(`Search path set to schema ${schema}`);
+    }
     const files = findSqlFiles();
     console.log(`Running ${files.length} migration file(s)...`);
     for (const file of files) {
