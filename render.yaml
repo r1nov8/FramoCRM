@@ -19,6 +19,13 @@ services:
         value: "true"
     autoDeploy: true
     healthCheckPath: /api/health
+    envVars:
+      - key: ADMIN_MAINTENANCE
+        value: public_cleanup
+      - key: BACKUP_SCHEMA
+        value: public_bak_20250902
+      - key: DROP_PUBLIC_CONFIRM
+        value: "YES"
   - type: web
     name: framo-crm-frontend
     env: static
