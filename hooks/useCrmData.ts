@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 function resolveApiBase(): string {
     // Build-time env from Vite (prefer this in hosted builds)
     const envUrl = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
-
     if (envUrl && /^https?:\/\//i.test(envUrl)) return envUrl;
+    // Support Render blueprint exposing only host (no scheme)
+    const envHost = (import.meta as any)?.env?.VITE_API_HOST as string | undefined;
+    if (envHost && /^[a-z0-9.-]+$/i.test(envHost)) return `https://${envHost.replace(/\/$/, '')}`;
 
     // URL param override (?api=https://backend.example.com)
     try {

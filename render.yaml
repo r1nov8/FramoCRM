@@ -36,9 +36,9 @@ services:
     buildCommand: "npm install && npm run build"
     staticPublishPath: dist
     envVars:
-      - key: VITE_API_URL
+      - key: VITE_API_HOST
         fromService:
           name: framo-crm-backend
           type: web
-          property: url
+          property: host
     autoDeploy: true

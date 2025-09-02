@@ -10,6 +10,8 @@ const httpInsecure = require('node:http');
 function resolveApiBase() {
   const env = process.env.VITE_API_URL || process.env.API_URL;
   if (env && /^https?:\/\//i.test(env)) return env;
+  const host = process.env.VITE_API_HOST;
+  if (host && /^[a-z0-9.-]+$/i.test(host)) return `https://${host.replace(/\/$/, '')}`;
   return 'http://localhost:4000';
 }
 
