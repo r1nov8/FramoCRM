@@ -13,6 +13,8 @@ services:
     buildCommand: "npm install"
     startCommand: "npm run migrate && node index.js"
     envVars:
+      - key: DB_SCHEMA
+        value: green
       - key: NODE_VERSION
         value: 20
       - key: JWT_SECRET
