@@ -765,13 +765,51 @@ export const EstimateCalculatorModal: React.FC<EstimateCalculatorModalProps> = (
         } catch {}
     };
 
+    // Simple manual save (without selecting a price)
+    const handleSaveEstimator = () => {
+        // Save to local storage first
+        saveEstimatorState();
+        // Persist the estimator snapshot to backend estimates
+        try {
+            const payload = {
+                adminPercent,
+                agentCommissionPercent,
+                profitMarginPercent,
+                bottomPercent,
+                usdRate,
+                eurRate,
+                jpyRate,
+                krwRate,
+                extras: lineItems,
+                shippingRegion,
+                startupLocation,
+                extraCommissioningDays,
+                comments,
+                totals: undefined as any, // totals are recomputed on load
+                flow: {
+                    capacityM3h: flowCapacityM3h === '' ? null : flowCapacityM3h,
+                    mwc: flowMwc === '' ? null : flowMwc,
+                    powerKw: flowPowerKw === '' ? null : flowPowerKw,
+                    description: flowDescription || null,
+                }
+            };
+            // do not block UI on save errors
+            saveProjectEstimate(String(project.id), isAH ? 'anti_heeling' : 'fuel_transfer', payload).catch(()=>{});
+        } catch {}
+    };
+
     // ... formatting helpers are defined at module scope
 
     return (
         <Modal isOpen={true} onClose={onClose} title="Estimate Calculator" size="7xl">
             <div className="text-sm text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
                  <div className="grid grid-cols-1 md:grid-cols-4 gap-x-4 gap-y-2 mb-4 border-b pb-4 dark:border-gray-700">
-                    <div className="md:col-span-4"><span className="font-semibold">Project:</span> {project.name}</div>
+                    <div className="md:col-span-4 flex items-center justify-between">
+                        <div><span className="font-semibold">Project:</span> {project.name}</div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={handleSaveEstimator} className="px-2 py-1 text-xs font-medium text-white bg-gray-700 rounded hover:bg-gray-800">Save</button>
+                        </div>
+                    </div>
                     <div><span className="font-semibold">Customer (Shipyard):</span> {shipyard?.name || 'N/A'}</div>
                     <div><span className="font-semibold">Vessel Owner:</span> {vesselOwner?.name || 'N/A'}</div>
                     <div><span className="font-semibold">Date:</span> {new Date().toLocaleDateString()}</div>
