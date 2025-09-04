@@ -224,7 +224,14 @@ function buildQuoteItems(proj, estData, templates = {}) {
   };
 
   const items = [];
-  const pumpQty = coalesce(toNum(estData.pumpQuantity), proj.pumps_per_vessel || 1);
+  // Prefer quantities from estimator line items when available
+  const liAll = Array.isArray(estData?.lineItems) ? estData.lineItems : [];
+  const pumpQty = (() => {
+    const q = liAll.find(x => x && x.isPump)?.qty;
+    const n = toNum(q);
+    if (n && n > 0) return n;
+    return coalesce(toNum(estData.pumpQuantity), proj.pumps_per_vessel || 1);
+  })();
   // Try nested pump object first
   const pumpType = coalesce(
     get(estData, ['pump.type', 'pump.model']) || estData.pumpType || estData.pump_model || estData.pumpModel,
@@ -238,6 +245,12 @@ function buildQuoteItems(proj, estData, templates = {}) {
   const ipPart = ex ? 'Ex-rated motor' : 'IP55';
   const grid = coalesce(estData.supply || estData.power_requirements || get(estData,'power.supply'), '440V/60Hz/3ph');
   const motorPower = coalesce(toNum(estData.motor_power_kw ?? get(estData,'motor.kw')), power);
+  // Prefer explicit variant from estimator (EX-Proof / NON EX-Proof)
+  const motorVariantLabel = (() => {
+    const mv = (Array.isArray(liAll) ? liAll.find(x => x && x.isMotor)?.motorVariant : undefined);
+    if (mv && String(mv).trim()) return String(mv);
+    return ex ? 'EX-Proof' : 'NON EX-Proof';
+  })();
   const capStr = [cap != null ? `${cap} m3/h` : null, head != null ? `${head} mwc` : null, power != null ? `${power} kW` : null].filter(Boolean).join(' @ ');
   const flangeVal = coalesce(get(estData, ['flangeType','pump.flange','flange']), '');
   const flange = flangeVal ? `, flange ${flangeVal}` : '';
@@ -252,7 +265,7 @@ function buildQuoteItems(proj, estData, templates = {}) {
     capacity: cap,
     head: head,
     motorRating: motorPower,
-    motorVariant: motorType,
+    motorVariant: motorVariantLabel,
   }) : null;
   if (!pumpDesc) {
     pumpDesc = `${pumpType}, capacity ${capStr || 'n/a'}, ${ipPart} el. motor${motorPower!=null?` rating ${motorPower} kW`:''} (${motorType}) at ${grid}${flange}${manometer}. Thermistor and space-heater included.`;
@@ -269,7 +282,12 @@ function buildQuoteItems(proj, estData, templates = {}) {
     items.push({ kind: 'control_system', qty: csQty, unit: 'of', description: csDesc });
   }
 
-  const starterQty = toNum(estData.starterQty) ?? (pumpQty || 0);
+  const starterQty = (() => {
+    const q = liAll.find(x => x && x.isStarter)?.qty;
+    const n = toNum(q);
+    if (n && n > 0) return n;
+    return toNum(estData.starterQty) ?? (pumpQty || 0);
+  })();
   if (starterQty > 0) {
     const stType = String(estData.starterType || '').toUpperCase();
     let stKey = 'ah_starter_dol';
@@ -284,6 +302,25 @@ function buildQuoteItems(proj, estData, templates = {}) {
   try {
     const li = Array.isArray(estData?.lineItems) ? estData.lineItems : [];
     const sumQty = (arr) => arr.reduce((s, x) => s + (Number(x?.qty) || 0), 0);
+    const modelOf = (m) => {
+      const u = String(m || '').toUpperCase();
+      if (u.includes('DBL FLANGE')) return 'DBL Flange';
+      if (u.includes('SEMI-LUG')) return 'Semi-Lug';
+      if (u.includes('LUG')) return 'Lug';
+      if (u.includes('WAFER')) return 'Wafer';
+      if (u.includes('MONO')) return 'Mono';
+      return 'Valve';
+    };
+    const breakdown = (arr) => {
+      const map = new Map();
+      for (const x of arr) {
+        const n = Number(x?.qty) || 0;
+        if (!n) continue;
+        const label = modelOf(x?.valveModel);
+        map.set(label, (map.get(label) || 0) + n);
+      }
+      return Array.from(map.entries()).map(([k,v]) => `${v} ${k}`).join(', ');
+    };
     const pneSingle = li.filter(x => x?.isValve && (x.valveActing || 'Single-acting') === 'Single-acting');
     const pneDouble = li.filter(x => x?.isValve && (x.valveActing || 'Single-acting') === 'Double-acting');
     const elecSingle = li.filter(x => x?.isValveEH && (x.valveActing || 'Single-acting') === 'Single-acting');
@@ -292,10 +329,40 @@ function buildQuoteItems(proj, estData, templates = {}) {
     const qPneD = sumQty(pneDouble);
     const qEleS = sumQty(elecSingle);
     const qEleD = sumQty(elecDouble);
-    if (qPneS > 0) items.push({ kind: 'valve_pne_single', qty: qPneS, unit: 'of', description: fill('ah_valve_pne_single', {}) || 'Pneumatic butterfly valve, single-acting.' });
-    if (qPneD > 0) items.push({ kind: 'valve_pne_double', qty: qPneD, unit: 'of', description: fill('ah_valve_pne_double', {}) || 'Pneumatic butterfly valve, double-acting.' });
-    if (qEleS > 0) items.push({ kind: 'valve_electric_single', qty: qEleS, unit: 'of', description: fill('ah_valve_electric_single', {}) || 'Electric-actuated butterfly valve, single-acting.' });
-    if (qEleD > 0) items.push({ kind: 'valve_electric_double', qty: qEleD, unit: 'of', description: fill('ah_valve_electric_double', {}) || 'Electric-actuated butterfly valve, double-acting.' });
+    // Pneumatic valves aggregated into one line when both actings present
+    if ((qPneS + qPneD) > 0) {
+      if (qPneS > 0 && qPneD > 0) {
+        const partS = breakdown(pneSingle);
+        const partD = breakdown(pneDouble);
+        const desc = `${qPneS} single-acting${partS?` (${partS})`:''}, ${qPneD} double-acting${partD?` (${partD})`:''} Pneum. Valve`;
+        items.push({ kind: 'valve_pne', qty: (qPneS + qPneD), unit: 'of', description: desc });
+      } else if (qPneS > 0) {
+        const partS = breakdown(pneSingle);
+        const d = partS ? `Pneumatic butterfly valve, single-acting (${partS}).` : (fill('ah_valve_pne_single', {}) || 'Pneumatic butterfly valve, single-acting.');
+        items.push({ kind: 'valve_pne_single', qty: qPneS, unit: 'of', description: d });
+      } else if (qPneD > 0) {
+        const partD = breakdown(pneDouble);
+        const d = partD ? `Pneumatic butterfly valve, double-acting (${partD}).` : (fill('ah_valve_pne_double', {}) || 'Pneumatic butterfly valve, double-acting.');
+        items.push({ kind: 'valve_pne_double', qty: qPneD, unit: 'of', description: d });
+      }
+    }
+    // Electric valves aggregated into one line when both actings present
+    if ((qEleS + qEleD) > 0) {
+      if (qEleS > 0 && qEleD > 0) {
+        const partS = breakdown(elecSingle);
+        const partD = breakdown(elecDouble);
+        const desc = `${qEleS} single-acting${partS?` (${partS})`:''}, ${qEleD} double-acting${partD?` (${partD})`:''} Electric Valve`;
+        items.push({ kind: 'valve_electric', qty: (qEleS + qEleD), unit: 'of', description: desc });
+      } else if (qEleS > 0) {
+        const partS = breakdown(elecSingle);
+        const d = partS ? `Electric-actuated butterfly valve, single-acting (${partS}).` : (fill('ah_valve_electric_single', {}) || 'Electric-actuated butterfly valve, single-acting.');
+        items.push({ kind: 'valve_electric_single', qty: qEleS, unit: 'of', description: d });
+      } else if (qEleD > 0) {
+        const partD = breakdown(elecDouble);
+        const d = partD ? `Electric-actuated butterfly valve, double-acting (${partD}).` : (fill('ah_valve_electric_double', {}) || 'Electric-actuated butterfly valve, double-acting.');
+        items.push({ kind: 'valve_electric_double', qty: qEleD, unit: 'of', description: d });
+      }
+    }
   } catch {}
 
   const levelSwitchQty = toNum(estData.levelSwitchQty) || (() => {
@@ -1320,6 +1387,47 @@ app.get('/api/project-files', async (req, res) => {
   }
 });
 
+// --- Admin: Product description templates (protected by ADMIN_USERS) ---
+function isAdmin(req) {
+  try {
+    const list = (process.env.ADMIN_USERS || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (!list.length) return true; // if not configured, allow in dev
+    const u = (req.user && (req.user.username || req.user.name)) || '';
+    return !!list.find(x => x.toLowerCase() === String(u || '').toLowerCase());
+  } catch { return false; }
+}
+
+app.get('/api/admin/product-descriptions', requireAuth, async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { rows } = await pool.query('SELECT key, scope_template, updated_at FROM product_descriptions ORDER BY key');
+    res.json(rows);
+  } catch (err) {
+    console.error('List product-descriptions error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/admin/product-descriptions/:key', requireAuth, async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const k = String(req.params.key || '').trim();
+    const tpl = String(req.body?.scope_template || '');
+    if (!k || !tpl) return res.status(400).json({ error: 'key and scope_template are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO product_descriptions(key, scope_template)
+       VALUES ($1,$2)
+       ON CONFLICT (key) DO UPDATE SET scope_template = EXCLUDED.scope_template, updated_at = NOW()
+       RETURNING key, scope_template, updated_at`,
+      [k, tpl]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Update product-description error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/project-files', async (req, res) => {
   try {
     const { projectId, name, type, size, content } = req.body;
@@ -1585,6 +1693,19 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
       } catch {}
     }
 
+    // Prepared-by (sales rep) info for signatures/placeholders
+    let repName = '';
+    let repTitle = '';
+    if (proj.sales_rep_id) {
+      try {
+        const r = await pool.query('SELECT first_name, last_name, job_title FROM team_members WHERE id = $1', [proj.sales_rep_id]);
+        if (r.rows[0]) {
+          repName = [r.rows[0].first_name, r.rows[0].last_name].filter(Boolean).join(' ').trim();
+          repTitle = r.rows[0].job_title || '';
+        }
+      } catch {}
+    }
+
     function pick(val, def) { return val !== undefined && val !== null && val !== '' ? val : def; }
     function num(n) { const v = Number(n); return Number.isFinite(v) ? v : undefined; }
 
@@ -1772,6 +1893,8 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
             contact_name: estData.contactName || '',
             contact_email: estData.contactEmail || '',
             contact_phone: estData.contactPhone || '',
+            prepared_by_name: repName,
+            prepared_by_title: repTitle,
           };
           doc.setData(data);
           doc.render();

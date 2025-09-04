@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ExitDoorIcon, UsersIcon, BellIcon } from './components/icons';
 import { IconSidebar } from './components/IconSidebar';
@@ -14,6 +14,7 @@ import { AddCompanyModal } from './components/AddCompanyModal';
 import { AddContactModal } from './components/AddContactModal';
 import { ManageTeamModal } from './components/ManageTeamModal';
 import { HPUSizingModal } from './components/HPUSizingModal';
+import { ManageTemplatesModal } from './components/ManageTemplatesModal';
 import { EstimateCalculatorModal } from './components/EstimateCalculatorModal';
 import type { Project, Company, Contact, Currency, Activity } from './types';
 import { CompanyType, ProjectType } from './types';
@@ -69,6 +70,8 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
     const [isManageTeamModalOpen, setIsManageTeamModalOpen] = useState(false);
     const [isHPUSizingModalOpen, setIsHPUSizingModalOpen] = useState(false);
     const [isEstimateCalculatorOpen, setIsEstimateCalculatorOpen] = useState(false);
+    const [isManageTemplatesOpen, setIsManageTemplatesOpen] = useState(false);
+    const [canManageTemplates, setCanManageTemplates] = useState(false);
     const [activeView, setActiveView] = useState<View>('dashboard');
     const [companyTypeForModal, setCompanyTypeForModal] = useState<CompanyType | null>(null);
     const [isActivityOpen, setIsActivityOpen] = useState(false);
@@ -110,6 +113,24 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }, [activeView]);
 
     const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
+
+    // Capability check: only show Templates if backend allows admin endpoints
+    useEffect(() => {
+        let mounted = true;
+        const check = async () => {
+            try {
+                const api = (window as any).API_URL || window.location.origin;
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${api}/api/admin/product-descriptions`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                if (!mounted) return;
+                setCanManageTemplates(res.ok);
+            } catch {
+                if (mounted) setCanManageTemplates(false);
+            }
+        };
+        check();
+        return () => { mounted = false; };
+    }, []);
 
     const handleAddProjectAndCloseModal = (newProject: Omit<Project, 'id'>) => {
         handleAddProject(newProject);
@@ -200,6 +221,16 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                                                                                             </div>
                                                                                         )}
                                                                                     </div>
+                            {/* Admin-only Templates editor button (backend enforced; only show if allowed) */}
+                            {canManageTemplates && (
+                                <button
+                                    onClick={() => setIsManageTemplatesOpen(true)}
+                                    className="flex items-center justify-center px-2 py-1 text-xs text-white bg-purple-600 rounded-md hover:bg-purple-700"
+                                    title="Manage Quote Templates"
+                                >
+                                    Templates
+                                </button>
+                            )}
                             <button
                                 onClick={() => setIsManageTeamModalOpen(true)}
                                 className="flex items-center justify-center p-1 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
@@ -342,6 +373,9 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                     onUpdateProjectPrice={handleUpdateProjectPriceAndCloseModal}
                     onClose={() => setIsEstimateCalculatorOpen(false)}
                 />
+            )}
+            {isManageTemplatesOpen && (
+                <ManageTemplatesModal onClose={() => setIsManageTemplatesOpen(false)} />
             )}
             {/* Global Activity slide-over to ensure visibility of the button in header */}
             {activityProjectId && (

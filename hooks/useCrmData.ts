@@ -924,6 +924,24 @@ export const useCrmData = () => {
         return file;
     };
 
+    // ---- Admin templates API (backend enforces ADMIN_USERS) ----
+    const listProductDescriptions = async () => {
+        if (MOCK) return [] as Array<{ key: string; scope_template: string; updated_at?: string }>;
+        const res = await fetch(`${API_URL}/api/admin/product-descriptions`, { headers: { ...authHeaders() } });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    };
+    const updateProductDescription = async (key: string, scope_template: string) => {
+        if (MOCK) return { key, scope_template };
+        const res = await fetch(`${API_URL}/api/admin/product-descriptions/${encodeURIComponent(key)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ scope_template })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    };
+
     const addProjectMember = async (projectId: string, teamMemberId: string, role?: string) => {
         if (MOCK) { return; }
         const res = await fetch(`${API_URL}/api/projects/${projectId}/members`, {
@@ -997,6 +1015,8 @@ export const useCrmData = () => {
     // Expose reload helpers for components to refresh after imports, etc.
     reloadProjects: fetchProjects,
     reloadCompanies: fetchCompanies,
+    listProductDescriptions,
+    updateProductDescription,
     reloadContacts: fetchContacts,
     reloadTeamMembers: fetchTeamMembers
     };
