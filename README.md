@@ -150,3 +150,8 @@ Schema-to-schema ETL (optional)
       - CREATE SCHEMA public; -- optional, if you want to keep a clean empty public
       - GRANT USAGE ON SCHEMA public TO your_db_user; -- if needed
       - Note: If you prefer to keep public, you can instead drop individual old tables.
+
+## Debug endpoints
+
+- Health check: `GET /api/health`
+- Deployment wiring: `GET /api/debug/info` — shows DB host, search_path, schema flags (role column, tables), and counts of users/admins (useful to confirm Azure App Service uses the intended DB).

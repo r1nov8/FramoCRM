@@ -191,6 +191,83 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
 });
 
+// Lightweight debug info to verify deployment wiring (DB target, schema flags, user counts)
+app.get('/api/debug/info', async (req, res) => {
+  try {
+    // Parse DB target from configured URL
+    let db = { host: 'localhost', database: 'crmdb', ssl: false };
+    try {
+      const u = new URL(RAW_DB_URL || 'postgres://crmuser:crmpassword@localhost:5432/crmdb');
+      db.host = u.hostname + (u.port ? ':' + u.port : '');
+      db.database = (u.pathname || '').replace(/^\//, '') || undefined;
+      const ssl = u.searchParams.get('ssl') || u.searchParams.get('sslmode');
+      db.ssl = !!(ssl && /^(require|1|true)$/i.test(ssl));
+    } catch {}
+
+    // Collect basic server/session info
+    let searchPath = '';
+    let serverVersion = '';
+    try {
+      const r = await pool.query("SELECT current_setting('search_path') AS search_path, version() AS version");
+      searchPath = r.rows[0]?.search_path || '';
+      serverVersion = r.rows[0]?.version || '';
+    } catch {}
+
+    // Schema feature flags (existence checks)
+    async function hasColumn(table, column) {
+      try {
+        const q = `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 AND column_name=$2 LIMIT 1`;
+        const { rows } = await pool.query(q, [String(table), String(column)]);
+        return rows.length > 0;
+      } catch { return false; }
+    }
+    async function hasTable(table) {
+      try {
+        const q = `SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=$1 LIMIT 1`;
+        const { rows } = await pool.query(q, [String(table)]);
+        return rows.length > 0;
+      } catch { return false; }
+    }
+
+    const flags = {
+      users_role: await hasColumn('users', 'role'),
+      team_members: await hasTable('team_members'),
+      project_line_items: await hasTable('project_line_items'),
+      product_descriptions: await hasTable('product_descriptions'),
+      activity_reads: await hasTable('activity_reads'),
+    };
+
+    // User counts and presence of seeded admins
+    let totalUsers = 0; let adminUsers = 0; let hasReno = false; let hasRune = false;
+    try {
+      const all = await pool.query('SELECT COUNT(*)::int AS n FROM users');
+      totalUsers = all.rows?.[0]?.n || 0;
+    } catch {}
+    try {
+      if (flags.users_role) {
+        const r = await pool.query("SELECT COUNT(*)::int AS n FROM users WHERE role = 'admin'");
+        adminUsers = r.rows?.[0]?.n || 0;
+      }
+    } catch {}
+    try {
+      const r2 = await pool.query('SELECT LOWER(email) AS email, LOWER(username) AS username FROM users');
+      const emails = new Set(r2.rows.flatMap(r => [r.email, r.username].filter(Boolean)));
+      hasReno = emails.has('reki@framo.no');
+      hasRune = emails.has('rsak@framo.no');
+    } catch {}
+
+    res.json({
+      time: new Date().toISOString(),
+      db: { ...db, searchPath, serverVersion },
+      schema: flags,
+      users: { total: totalUsers, admins: adminUsers, reki: hasReno, rsak: hasRune },
+    });
+  } catch (err) {
+    console.error('debug/info error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // --- Database connection (Render-compatible) ---
 // Normalize connection string and make SSL explicit for hosted DBs
 let RAW_DB_URL = process.env.DATABASE_URL ? String(process.env.DATABASE_URL).trim() : '';
