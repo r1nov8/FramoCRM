@@ -13,10 +13,26 @@ const backendDir = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(backendDir, '.env') });
 
 function findSqlFiles() {
-  const files = fs.readdirSync(backendDir);
-  const init = files.includes('init.sql') ? ['init.sql'] : [];
-  const migrates = files.filter(f => /^migrate_.*\.sql$/i.test(f)).sort();
-  return [...init, ...migrates].map(f => path.join(backendDir, f));
+  const out = [];
+  const collect = (dir) => {
+    try {
+      const files = fs.readdirSync(dir);
+      const migrates = files.filter(f => /^migrate_.*\.sql$/i.test(f)).map(f => path.join(dir, f));
+      out.push(...migrates);
+    } catch {}
+  };
+  // init.sql only from backend root
+  try {
+    if (fs.existsSync(path.join(backendDir, 'init.sql'))) out.push(path.join(backendDir, 'init.sql'));
+  } catch {}
+  // Top-level migrations
+  collect(backendDir);
+  // Also include migrations placed under backend/scripts
+  collect(path.join(backendDir, 'scripts'));
+  // De-duplicate and sort by filename (lexicographic)
+  const uniq = Array.from(new Set(out));
+  uniq.sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
+  return uniq;
 }
 
 async function run() {
