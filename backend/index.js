@@ -19,9 +19,28 @@ const { Pool } = pkg;
 // Load env from .env (local dev) if present
 dotenv.config();
 
-// --- Check for required environment variables (warn for local dev) ---
-if (!process.env.DATABASE_URL) {
-  console.warn('[WARN] DATABASE_URL not set; defaulting to local postgres (postgres://crmuser:crmpassword@localhost:5432/crmdb).');
+// --- Resolve database connection string with Azure-friendly fallbacks ---
+function resolveDatabaseUrl() {
+  const candidates = [];
+  if (process.env.DATABASE_URL) candidates.push({ source: 'DATABASE_URL', value: process.env.DATABASE_URL });
+  if (process.env.AZURE_POSTGRESQL_CONNECTIONSTRING) candidates.push({ source: 'AZURE_POSTGRESQL_CONNECTIONSTRING', value: process.env.AZURE_POSTGRESQL_CONNECTIONSTRING });
+  if (process.env.POSTGRES_URL) candidates.push({ source: 'POSTGRES_URL', value: process.env.POSTGRES_URL });
+  if (process.env.PG_CONNECTION_STRING) candidates.push({ source: 'PG_CONNECTION_STRING', value: process.env.PG_CONNECTION_STRING });
+  // Azure App Service exposes custom connection strings under CUSTOMCONNSTR_<NAME>
+  for (const [k,v] of Object.entries(process.env)) {
+    if (k.startsWith('CUSTOMCONNSTR_') && /POSTGRES|PG|DB|DATABASE/i.test(k)) {
+      candidates.push({ source: k, value: v });
+    }
+  }
+  const chosen = candidates.find(c => /postgres/i.test(String(c.value))) || candidates[0];
+  if (chosen && chosen.value) return { url: String(chosen.value).trim(), source: chosen.source };
+  return { url: '', source: null };
+}
+const { url: RESOLVED_DB_URL, source: RESOLVED_DB_SOURCE } = resolveDatabaseUrl();
+if (!RESOLVED_DB_URL) {
+  console.error('[FATAL] No PostgreSQL connection string env var found. Set DATABASE_URL in Azure App Service > Configuration.');
+  console.warn('Checked: DATABASE_URL, AZURE_POSTGRESQL_CONNECTIONSTRING, POSTGRES_URL, PG_CONNECTION_STRING, CUSTOMCONNSTR_*');
+  console.warn('Falling back to local development connection (postgres://crmuser:crmpassword@localhost:5432/crmdb) so server can still start for troubleshooting.');
 }
 if (!process.env.JWT_SECRET) {
   console.warn('[WARN] JWT_SECRET environment variable is not set. Using default value.');
@@ -209,7 +228,7 @@ app.use((req, res, next) => {
     }
   }
 
-// Simple health endpoint
+// Simple health endpoint (includes dbSource for deployment verification)
 app.get('/api/health', (req, res) => {
   let dbHost = null;
   try {
@@ -222,7 +241,8 @@ app.get('/api/health', (req, res) => {
     ok: true,
     uptime: process.uptime(),
     commit: process.env.APP_COMMIT || null,
-    dbHost
+    dbHost,
+    dbSource: RESOLVED_DB_SOURCE || null
   });
 });
 
@@ -303,9 +323,9 @@ app.get('/api/debug/info', async (req, res) => {
   }
 });
 
-// --- Database connection (Render-compatible) ---
+// --- Database connection (supports Azure & Render) ---
 // Normalize connection string and make SSL explicit for hosted DBs
-let RAW_DB_URL = process.env.DATABASE_URL ? String(process.env.DATABASE_URL).trim() : '';
+let RAW_DB_URL = RESOLVED_DB_URL ? String(RESOLVED_DB_URL).trim() : '';
 if (RAW_DB_URL && RAW_DB_URL.startsWith('postgresql://')) {
   // Some pg versions work better with postgres://
   RAW_DB_URL = 'postgres://' + RAW_DB_URL.slice('postgresql://'.length);
@@ -316,9 +336,9 @@ try {
   if (RAW_DB_URL) {
     const u = new URL(RAW_DB_URL);
     const hostInfo = `${u.hostname}${u.port ? ':' + u.port : ''}/${(u.pathname || '').replace(/^\//, '')}`;
-    console.log(`[DB] Connecting to ${hostInfo} (ssl=${u.searchParams.get('ssl') || u.searchParams.get('sslmode') || 'n/a'})`);
+    console.log(`[DB] Connecting to ${hostInfo} (ssl=${u.searchParams.get('ssl') || u.searchParams.get('sslmode') || 'n/a'}) via ${RESOLVED_DB_SOURCE || 'unknown-var'}`);
   } else {
-    console.log('[DB] No DATABASE_URL provided, defaulting to local postgres at postgres://crmuser:crmpassword@localhost:5432/crmdb');
+    console.log('[DB] Using local fallback postgres://crmuser:crmpassword@localhost:5432/crmdb');
   }
 } catch {}
 
