@@ -1,3 +1,4 @@
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -7,16 +8,34 @@ import jwt from 'jsonwebtoken';
 import path from 'path';
 import fs from 'fs';
 import { promises as fsp } from 'fs';
-// CSV import removed
 import { fileURLToPath } from 'url';
-// Excel import dependencies removed as part of rollback
+
+// --- Global error handlers for better Azure diagnostics ---
+process.on('unhandledRejection', (reason, p) => {
+  console.error('Unhandled Rejection at:', p, 'reason:', reason);
+  process.exit(1);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
+  process.exit(1);
+});
 
 const { Pool } = pkg;
+
 
 // ESM-compatible __dirname then load .env from backend directory
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
+
+// --- Check for required environment variables ---
+if (!process.env.DATABASE_URL) {
+  console.error('[FATAL] DATABASE_URL environment variable is not set. Set it in Azure App Service > Configuration > Application settings.');
+  process.exit(1);
+}
+if (!process.env.JWT_SECRET) {
+  console.warn('[WARN] JWT_SECRET environment variable is not set. Using default value.');
+}
 
 const app = express();
 const port = process.env.PORT || 4000;
