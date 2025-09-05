@@ -143,99 +143,99 @@ const CompanyInfoPage: React.FC = () => {
     // Upload removed
 
     return (
-    <div className="flex flex-col h-full w-full m-0 p-0 bg-white dark:bg-gray-900">
-            {/* Top banner removed as requested */}
-            <div className="flex-1 min-h-0 overflow-auto pt-2 px-0">
-                <CompanyInfoGrid
-                    selectedRows={selectedRows}
-                    onSelectedRowsChange={setSelectedRows}
-                    addTrigger={addTrigger}
-                    onCountsChange={(v, t) => { setVisibleCount(v); setTotalCount(t); }}
-                    clearFiltersTrigger={clearFiltersTrigger}
-                    filters={filters}
-                    onFiltersChange={(f)=>{
-                        setFilters(f);
-                        try { localStorage.setItem('companyInfo.filters', JSON.stringify(f)); } catch {}
-                    }}
-                />
-            </div>
-            <div className="flex items-center justify-between px-2 py-2 border-t border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300 -ml-2 pl-2">
-                <div className="flex items-center gap-2">
-                    <span>{visibleCount === totalCount ? `${totalCount} companies` : `${visibleCount} of ${totalCount} companies`}</span>
-                    {/* Saved Views */}
-                    <select
-                        className="ml-3 rounded bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs"
-                        value={selectedView}
-                        onChange={(e)=>{
-                            const name = e.target.value;
-                            setSelectedView(name);
-                            const v = views[name] || {};
-                            setFilters(v);
-                            try {
-                                localStorage.setItem('companyInfo.filters', JSON.stringify(v));
-                            } catch {}
-                        }}
-                    >
-                        <option value="">Unsaved view</option>
-                        {Object.keys(views).map(n => (
-                            <option key={n} value={n}>{n}</option>
-                        ))}
-                    </select>
-                    <button
-                        title="Save current filters as view"
-                        className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
-                        onClick={() => {
-                            const name = prompt('Save view as…');
-                            if (!name) return;
-                            const next = { ...views, [name]: filters };
-                            setViews(next);
-                            setSelectedView(name);
-                            try { localStorage.setItem('companyInfo.views', JSON.stringify(next)); } catch {}
-                        }}
-                    >
-                        Save view
-                    </button>
-                    {selectedView && (
-                        <button
-                            title="Delete current saved view"
-                            className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
-                            onClick={() => {
-                                const { [selectedView]:_, ...rest } = views;
-                                setViews(rest);
-                                setSelectedView('');
-                                try { localStorage.setItem('companyInfo.views', JSON.stringify(rest)); } catch {}
+                        <div className="flex flex-col h-full w-full m-0 p-0 bg-white dark:bg-gray-900">
+                    {/* Top banner removed as requested */}
+                    <div className="flex-1 min-h-0 overflow-auto pt-2 px-0">
+                        <CompanyInfoGrid
+                            selectedRows={selectedRows}
+                            onSelectedRowsChange={setSelectedRows}
+                            addTrigger={addTrigger}
+                            onCountsChange={(v, t) => { setVisibleCount(v); setTotalCount(t); }}
+                            clearFiltersTrigger={clearFiltersTrigger}
+                            filters={filters}
+                            onFiltersChange={(f)=>{
+                                setFilters(f);
+                                try { localStorage.setItem('companyInfo.filters', JSON.stringify(f)); } catch {}
                             }}
-                        >
-                            Delete view
-                        </button>
-                    )}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between px-2 py-2 border-t border-primary-200 dark:border-gray-700 bg-primary-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300 -ml-2 pl-2">
+                        <div className="flex items-center gap-2">
+                            <span>{visibleCount === totalCount ? `${totalCount} companies` : `${visibleCount} of ${totalCount} companies`}</span>
+                            {/* Saved Views */}
+                            <select
+                                className="ml-3 rounded bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs"
+                                value={selectedView}
+                                onChange={(e)=>{
+                                    const name = e.target.value;
+                                    setSelectedView(name);
+                                    const v = views[name] || {};
+                                    setFilters(v);
+                                    try {
+                                        localStorage.setItem('companyInfo.filters', JSON.stringify(v));
+                                    } catch {}
+                                }}
+                            >
+                                <option value="">Unsaved view</option>
+                                {Object.keys(views).map(n => (
+                                    <option key={n} value={n}>{n}</option>
+                                ))}
+                            </select>
+                            <button
+                                title="Save current filters as view"
+                                className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                onClick={() => {
+                                    const name = prompt('Save view as…');
+                                    if (!name) return;
+                                    const next = { ...views, [name]: filters };
+                                    setViews(next);
+                                    setSelectedView(name);
+                                    try { localStorage.setItem('companyInfo.views', JSON.stringify(next)); } catch {}
+                                }}
+                            >
+                                Save view
+                            </button>
+                            {selectedView && (
+                                <button
+                                    title="Delete current saved view"
+                                    className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                    onClick={() => {
+                                        const { [selectedView]:_, ...rest } = views;
+                                        setViews(rest);
+                                        setSelectedView('');
+                                        try { localStorage.setItem('companyInfo.views', JSON.stringify(rest)); } catch {}
+                                    }}
+                                >
+                                    Delete view
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button title="Clear filters" className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={() => setClearFiltersTrigger(t => t + 1)}>
+                                Clear filters
+                            </button>
+                            <button title="Reload companies" className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={reloadCompanies}>
+                                Reload
+                            </button>
+                            <button title="Add company" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={()=>{
+                                setAddTrigger(t => t + 1);
+                            }}>
+                                <PlusIcon className="h-5 w-5" />
+                            </button>
+                            <button title="Delete selected" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
+                                const ids = Array.from(selectedRows);
+                                if (!ids.length) return alert('Select rows to delete.');
+                                if (!confirm(`Delete ${ids.length} compan${ids.length>1?'ies':'y'}?`)) return;
+                                for (const id of ids) {
+                                    await handleDeleteCompany(id);
+                                }
+                                setSelectedRows(new Set());
+                            }}>
+                                <TrashIcon className="h-5 w-5" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button title="Clear filters" className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={() => setClearFiltersTrigger(t => t + 1)}>
-                        Clear filters
-                    </button>
-                    <button title="Reload companies" className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onClick={reloadCompanies}>
-                        Reload
-                    </button>
-                    <button title="Add company" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={()=>{
-                        setAddTrigger(t => t + 1);
-                    }}>
-                        <PlusIcon className="h-5 w-5" />
-                    </button>
-                    <button title="Delete selected" className="p-1 hover:bg-primary-100 dark:hover:bg-gray-700 rounded" onClick={async()=>{
-                        const ids = Array.from(selectedRows);
-                        if (!ids.length) return alert('Select rows to delete.');
-                        if (!confirm(`Delete ${ids.length} compan${ids.length>1?'ies':'y'}?`)) return;
-                        for (const id of ids) {
-                            await handleDeleteCompany(id);
-                        }
-                        setSelectedRows(new Set());
-                    }}>
-                        <TrashIcon className="h-5 w-5" />
-                    </button>
-                </div>
-            </div>
-        </div>
     );
 };
 

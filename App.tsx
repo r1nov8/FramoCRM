@@ -20,8 +20,9 @@ import type { Project, Company, Contact, Currency, Activity } from './types';
 import { CompanyType, ProjectType } from './types';
 import { useData } from './context/DataContext';
 import ActivitySlideOver from './components/ActivitySlideOver';
+import { ContactsPage } from './components/ContactsPage';
 
-type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files' | 'intel' | 'leads';
+type View = 'dashboard' | 'pipeline' | 'companyInfo' | 'files' | 'intel' | 'leads' | 'contacts';
 
 interface AppProps {
     user: { name: string; initials: string };
@@ -283,6 +284,11 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 {activeView === 'files' && (
                     <main className="flex-1 overflow-y-auto p-0">
                         <FilesBrowser />
+                    </main>
+                )}
+                {activeView === 'contacts' && (
+                    <main className="flex-1 overflow-y-auto p-0 pl-2">
+                        <ContactsPage companies={companies.map(c => ({ id: Number(c.id), name: c.name }))} />
                     </main>
                 )}
                 {/* Slide-in Project Pipeline View */}
