@@ -66,7 +66,9 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS
       'http://127.0.0.1:5173',
       // Additional local dev ports used by Vite when 5173 is taken
       'http://localhost:5174',
-      'http://127.0.0.1:5174'
+      'http://127.0.0.1:5174',
+      // Azure Static Web Apps production frontend
+      'https://ashy-island-055029303.2.azurestaticapps.net'
     ]);
 
 const corsOptions = {
