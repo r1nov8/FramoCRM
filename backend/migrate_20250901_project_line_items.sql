@@ -1,8 +1,40 @@
--- Line items attached to projects; optionally reference product_variants
-CREATE TABLE IF NOT EXISTS project_line_items (
-  id SERIAL PRIMARY KEY,
-  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  product_variant_id INTEGER REFERENCES product_variants(id) ON DELETE SET NULL,
+-- Line items attached to projects; optionally reference product_variants if it exists
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='product_variants') THEN
+    CREATE TABLE IF NOT EXISTS project_line_items (
+      id SERIAL PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      product_variant_id INTEGER NULL,
+      legacy_type TEXT,
+      quantity NUMERIC,
+      unit_price NUMERIC,
+      currency TEXT,
+      discount NUMERIC,
+      notes TEXT,
+      capacity NUMERIC,
+      head NUMERIC,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  ELSE
+    CREATE TABLE IF NOT EXISTS project_line_items (
+      id SERIAL PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      product_variant_id INTEGER REFERENCES product_variants(id) ON DELETE SET NULL,
+      legacy_type TEXT,
+      quantity NUMERIC,
+      unit_price NUMERIC,
+      currency TEXT,
+      discount NUMERIC,
+      notes TEXT,
+      capacity NUMERIC,
+      head NUMERIC,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  END IF;
+END$$;
   legacy_type TEXT,
   quantity NUMERIC,
   unit_price NUMERIC,
