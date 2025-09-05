@@ -67,27 +67,64 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS
       // Additional local dev ports used by Vite when 5173 is taken
       'http://localhost:5174',
       'http://127.0.0.1:5174',
-      // Azure Static Web Apps production frontend
+      // Default production SWA domain (kept for explicit allow)
       'https://ashy-island-055029303.2.azurestaticapps.net'
     ]);
+
+// Precompile helpers for robust origin checks
+const allowedOriginSet = new Set(allowedOrigins);
+const allowedOriginPatterns = [
+  // Allow any Azure Static Web Apps host
+  /\.azurestaticapps\.net$/i,
+];
+
+function parseHostFromOrigin(origin) {
+  try {
+    return new URL(origin).host;
+  } catch {
+    // Fallback: strip protocol if present
+    return String(origin || '').replace(/^https?:\/\//i, '').split('/')[0];
+  }
+}
+
+function isOriginAllowed(origin) {
+  if (!origin) return true; // server-to-server or curl
+  const host = parseHostFromOrigin(origin);
+  if (!host) return true;
+
+  // Exact matches (including full origin with scheme)
+  if (allowedOriginSet.has(origin)) return true;
+  // Host-only match convenience
+  if (allowedOriginSet.has(`https://${host}`) || allowedOriginSet.has(`http://${host}`)) return true;
+
+  // Localhost allowances
+  if (/^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host)) return true;
+
+  // Pattern-based allowances
+  if (allowedOriginPatterns.some((rx) => rx.test(host))) return true;
+
+  // Optional Render allowance via env flag
+  if (process.env.ALLOW_ONRENDER === 'true' && /\.onrender\.com$/i.test(host)) return true;
+
+  return false;
+}
 
 const corsOptions = {
   origin: function (origin, callback) {
     // allow requests with no origin (like curl) and server-to-server
     if (!origin) return callback(null, true);
-    const okList = allowedOrigins.includes(origin);
-    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\\d+)?$/i.test(origin || '');
-    const allowOnrender = process.env.ALLOW_ONRENDER === 'true';
-    const host = (origin || '').replace(/^https?:\/\//, '').split('/')[0] || '';
-    const isOnRender = /\.onrender\.com$/i.test(host);
-    if (okList || isLocalhost || (allowOnrender && isOnRender)) {
+    if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
+    try {
+      const host = parseHostFromOrigin(origin);
+      console.warn(`[CORS] Blocked origin: ${origin} (host=${host})`);
+    } catch {}
     return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
   methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization','Accept','Origin'],
+  allowedHeaders: ['Content-Type','Authorization','Accept','Origin','X-Requested-With'],
   optionsSuccessStatus: 204,
   preflightContinue: false,
 };
@@ -97,13 +134,16 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 // Increase payload limit to support larger CSV uploads wrapped in JSON
 app.use(express.json({ limit: '25mb' }));
-// Force JSON content type for API responses by default
+// Force JSON content type for API responses by default and reflect allowed origins
 app.use((req, res, next) => {
   if (req.path && req.path.startsWith('/api/')) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    // Explicitly allow CORS for local dev
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'http://localhost:5173');
-    res.setHeader('Vary', 'Origin');
+    const origin = req.headers.origin;
+    if (isOriginAllowed(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin || 'http://localhost:5173');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Vary', 'Origin');
+    }
   }
   next();
 });
@@ -191,6 +231,29 @@ pool.on('error', (err) => {
   }
   } catch (e) {
     console.warn('Warning: failed ensuring activity_reads table:', e?.message || e);
+  }
+})();
+
+// --- First-user bootstrap (optional) ---
+// If there are no users yet and DEFAULT_ADMIN_USERNAME/PASSWORD are provided,
+// create the initial account automatically. Otherwise, the UI's Register flow can be used.
+(async () => {
+  try {
+    const r = await pool.query('SELECT COUNT(*)::int AS n FROM users');
+    const n = (r.rows?.[0]?.n) ?? 0;
+    if (n === 0) {
+      const u = process.env.DEFAULT_ADMIN_USERNAME;
+      const p = process.env.DEFAULT_ADMIN_PASSWORD;
+      if (u && p) {
+        const hash = await bcrypt.hash(p, 10);
+        await pool.query('INSERT INTO users (username, password) VALUES ($1, $2)', [u, hash]);
+        console.log(`[Auth] Created default admin user '${u}' as the first user.`);
+      } else {
+        console.log('[Auth] No users found. Use the Register button in the UI to create the first account, or set DEFAULT_ADMIN_USERNAME and DEFAULT_ADMIN_PASSWORD to auto-create.');
+      }
+    }
+  } catch (e) {
+    console.warn('[Auth] Bootstrap check failed:', e?.message || e);
   }
 })();
 

@@ -18,22 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
-        with:
-          node-version: '22.x'
-
-      - name: npm install, build, and test
-        run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
-
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          # Only deploy the backend folder; dependencies will be installed at startup on Azure
+          path: backend/
 
   deploy:
     runs-on: ubuntu-latest
@@ -51,5 +41,6 @@ jobs:
         with:
           app-name: 'framocrm-backend'
           slot-name: 'Production'
-          package: .
+          # Deploy only the backend contents to the site root
+          package: ./
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_048DD0FF498C44A78D4A52EA32064D5F }}
