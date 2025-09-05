@@ -1,0 +1,50 @@
+name: Deploy Backend to Azure Web App
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend-azure.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Run DB migrations (Azure)
+        if: ${{ secrets.AZURE_DATABASE_URL != '' }}
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.AZURE_DATABASE_URL }}
+        run: node scripts/run_migrations.js
+
+      - name: Zip backend artifact
+        working-directory: backend
+        run: |
+          zip -r backend.zip . -x "node_modules/*" "**/.git*" "**/.DS_Store"
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          # App Service name (must match your Azure app)
+          app-name: framocrm-backend-faaggrcdgcdbethf
+          package: backend/backend.zip
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
