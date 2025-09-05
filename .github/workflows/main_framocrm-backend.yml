@@ -52,4 +52,4 @@ jobs:
           app-name: 'framocrm-backend'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_F683628DB9B44070A5899435BC16082D }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_048DD0FF498C44A78D4A52EA32064D5F }}
