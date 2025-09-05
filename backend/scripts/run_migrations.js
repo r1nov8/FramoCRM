@@ -29,19 +29,45 @@ function findSqlFiles() {
   collect(backendDir);
   // Also include migrations placed under backend/scripts
   collect(path.join(backendDir, 'scripts'));
-  // De-duplicate and sort by filename (lexicographic)
+  // De-duplicate
   const uniq = Array.from(new Set(out));
-  uniq.sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
+  // Sort by date token if present, with custom priority to satisfy dependencies
+  const priorityOf = (name) => {
+    const n = name.toLowerCase();
+    if (n.includes('add_user_role')) return 0; // must come before scripts that depend on role
+    if (n.includes('add_user_names')) return 1;
+    if (n.includes('add_admin_users')) return 2;
+    return 5;
+  };
+  const keyOf = (p) => {
+    const base = path.basename(p);
+    const m = base.match(/^migrate_(\d{8})_/i);
+    const dateKey = m ? m[1] : '00000000';
+    return { base, dateKey, pri: priorityOf(base) };
+  };
+  uniq.sort((a, b) => {
+    const ka = keyOf(a);
+    const kb = keyOf(b);
+    if (ka.dateKey !== kb.dateKey) return ka.dateKey.localeCompare(kb.dateKey);
+    if (ka.pri !== kb.pri) return ka.pri - kb.pri;
+    return ka.base.localeCompare(kb.base);
+  });
   return uniq;
 }
 
 async function run() {
-  const databaseUrl = process.env.DATABASE_URL;
+  let databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.error('DATABASE_URL is required to run migrations.');
     process.exit(1);
   }
-  const pool = new Pool({ connectionString: databaseUrl, ssl: databaseUrl.includes('render.com') ? { rejectUnauthorized: false } : false });
+  // Normalize scheme for node-postgres
+  if (databaseUrl.startsWith('postgresql://')) {
+    databaseUrl = 'postgres://' + databaseUrl.slice('postgresql://'.length);
+  }
+  const lower = databaseUrl.toLowerCase();
+  const needsSsl = /sslmode=require/.test(lower) || /postgres\.database\.azure\.com/.test(lower) || /render\.com/.test(lower);
+  const pool = new Pool({ connectionString: databaseUrl, ssl: needsSsl ? { rejectUnauthorized: false } : false });
   const client = await pool.connect();
   try {
     const schema = process.env.MIGRATE_SCHEMA || process.env.DB_SCHEMA || process.env.SCHEMA;
