@@ -1,6 +1,5 @@
-
 import { API_URL } from '../hooks/useCrmData';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface AuthFormProps {
   onAuthSuccess: (token: string, user: { name: string; initials: string }) => void;
@@ -13,13 +12,28 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'login' | 'register'>('login');
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/auth/has-users`);
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!cancelled && j && j.hasUsers === false) {
+          setMode('register');
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
       const base = API_URL;
-  if (mode === 'register') {
+      if (mode === 'register') {
         // Create the user first (prefer adblock-safe path), fallback if missing
         let regRes: Response | null = null;
         try {
@@ -95,6 +109,9 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         const txt = await res.text().catch(() => '');
         let msg = 'Login failed';
         try { const j = JSON.parse(txt); if (j?.error) msg = j.error; } catch {}
+        if (res.status === 401) {
+          msg = 'Invalid username or password. If this is your first time, click "Register" to create an account.';
+        }
         throw new Error(`${msg}${res.status ? ` (${res.status})` : ''}`);
       }
       const text = await res.text();

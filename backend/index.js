@@ -610,6 +610,18 @@ app.post('/api/session/register', async (req, res) => {
   }
 });
 
+// Lightweight info endpoint to help the UI decide initial auth mode
+app.get('/api/auth/has-users', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT COUNT(*)::int AS n FROM users');
+    const n = (r.rows?.[0]?.n) ?? 0;
+    res.json({ hasUsers: n > 0 });
+  } catch (err) {
+    console.error('has-users error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/session/start', async (req, res) => {
   try {
     const { username, password } = req.body;
