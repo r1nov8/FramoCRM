@@ -43,6 +43,19 @@ function resolveApiBase(): string {
         }
     } catch {}
 
+    // Azure Static Web Apps heuristic: if served from *.azurestaticapps.net and no
+    // explicit env/override found, default to the deployed Azure App Service backend URL.
+    // This ensures production works even if SWA env vars weren't picked up at build time.
+    try {
+        if (typeof window !== 'undefined') {
+            const host = window.location.hostname;
+            if (/\.azurestaticapps\.net$/i.test(host)) {
+                // Hardcoded backend base; keep in sync with Azure App Service host
+                return 'https://framocrm-backend-faaggrcdgcdbethf.westeurope-01.azurewebsites.net';
+            }
+        }
+    } catch {}
+
     // LocalStorage override (useful in local/dev without VITE_API_URL)
     try {
         if (typeof localStorage !== 'undefined') {
