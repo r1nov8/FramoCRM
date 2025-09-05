@@ -4,13 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "prebuild": "node scripts/gen-build-info.cjs",
-  "build": "vite build",
-  "preview": "vite preview",
-  "health": "node scripts/health-check.cjs",
-  "smoke": "npm run -s health",
-  "probe": "node scripts/probe-backends.cjs framocrm.onrender.com framo-crm-backend.onrender.com"
+    "dev": "vite",
+    "prebuild": "node scripts/gen-build-info.cjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "health": "node scripts/health-check.cjs",
+    "smoke": "npm run -s health",
+    "probe": "node scripts/probe-backends.cjs framocrm.onrender.com framo-crm-backend.onrender.com",
+    "postinstall": "cd backend && npm install"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
