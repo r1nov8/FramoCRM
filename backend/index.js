@@ -80,6 +80,9 @@ app.use(express.json({ limit: '25mb' }));
 app.use((req, res, next) => {
   if (req.path && req.path.startsWith('/api/')) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    // Explicitly allow CORS for local dev
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'http://localhost:5173');
+    res.setHeader('Vary', 'Origin');
   }
   next();
 });
