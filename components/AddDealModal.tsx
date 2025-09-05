@@ -619,7 +619,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ onClose, onAdd
                                 <label htmlFor="primaryContact" className={labelClass}>Primary Contact (Optional)</label>
                                 <div className="flex items-center space-x-2">
                                     <select id="primaryContact" value={primaryContactId} onChange={e => setPrimaryContactId(e.target.value)} className={inputClass}>
-                                        <option value="">Select Contact</option>
+                                        <option value="">{contacts.length === 0 ? 'No contacts available' : 'Select Contact'}</option>
                                         {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
                                     <button type="button" onClick={onAddContactClick} className={addButtonClass} aria-label="Add new contact">
