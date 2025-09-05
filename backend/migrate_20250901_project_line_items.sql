@@ -35,17 +35,7 @@ BEGIN
     );
   END IF;
 END$$;
-  legacy_type TEXT,
-  quantity NUMERIC,
-  unit_price NUMERIC,
-  currency TEXT,
-  discount NUMERIC,
-  notes TEXT,
-  capacity NUMERIC,
-  head NUMERIC,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+
 
 -- Touch updated_at on update
 CREATE OR REPLACE FUNCTION touch_project_line_items_updated_at()
