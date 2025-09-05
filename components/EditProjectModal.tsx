@@ -553,7 +553,7 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
                                 onChange={(e) => setPrimaryContactId(e.target.value)}
                                 className={inputClass}
                             >
-                                <option value="">{contacts.length === 0 ? 'No contacts available' : 'Select Contact'}</option>
+                                <option value="">Select Contact</option>
                                 {(Array.isArray(contacts) ? contacts : []).map((c) => (
                                     <option key={c.id} value={String(c.id)}>
                                         {c.name}

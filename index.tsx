@@ -13,13 +13,13 @@ if (!rootElement) {
 
 const Root: React.FC = () => {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
-  const [user, setUser] = useState<{ name: string; initials: string } | null>(() => {
+  const [user, setUser] = useState<{ name: string; initials: string; role?: string } | null>(() => {
     const stored = localStorage.getItem('user');
     return stored ? JSON.parse(stored) : null;
   });
   const [sessionExpired, setSessionExpired] = useState(false);
 
-  const handleAuthSuccess = (jwt: string, userInfo: { name: string; initials: string }) => {
+  const handleAuthSuccess = (jwt: string, userInfo: { name: string; initials: string; role?: string }) => {
     setToken(jwt);
     setUser(userInfo);
     localStorage.setItem('token', jwt);
@@ -60,9 +60,31 @@ const Root: React.FC = () => {
 
   return (
     <DataProvider>
+      <RefreshUser user={user} onUser={(u) => { setUser(u); localStorage.setItem('user', JSON.stringify(u)); }} />
       <App user={user} onLogout={handleLogout} />
     </DataProvider>
   );
+};
+
+// Component to refresh user profile from backend once after mount
+const RefreshUser: React.FC<{ user: { name: string; initials: string; role?: string } | null, onUser: (u: any) => void }> = ({ onUser }) => {
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const base = (window as any).API_URL || window.location.origin;
+        const t = localStorage.getItem('token');
+        if (!t) return;
+        const res = await fetch(`${base}/api/me`, { headers: { Authorization: `Bearer ${t}` } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const u = data?.user;
+        if (!cancelled && u) onUser(u);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [onUser]);
+  return null;
 };
 
 const root = ReactDOM.createRoot(rootElement);

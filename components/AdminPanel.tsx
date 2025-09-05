@@ -259,14 +259,14 @@ function TemplateModal({ template, onClose, onSave }: { template: any, onClose: 
   // Check admin status on mount
   useEffect(() => {
     const user = getUserFromToken();
-    setIsAdmin(!!user && (user.is_admin || user.role === 'admin' || user.email === 'reki@framo.no'));
+    setIsAdmin(!!user && (user.role === 'admin'));
   }, []);
 
   // Fetch team members
   useEffect(() => {
     if (tab !== 'Team Members') return;
     setLoading(true);
-    fetch(`${API_URL}/api/team-members`)
+  fetch(`${API_URL}/api/team-members`, { headers: { 'Authorization': localStorage.getItem('token') ? `Bearer ${localStorage.getItem('token')}` : '' } })
       .then(r => r.json())
       .then(setTeam)
       .catch(e => setError(e.message))
@@ -277,7 +277,7 @@ function TemplateModal({ template, onClose, onSave }: { template: any, onClose: 
   useEffect(() => {
     if (tab !== 'Users') return;
     setLoading(true);
-    fetch(`${API_URL}/api/users`)
+  fetch(`${API_URL}/api/users`, { headers: { 'Authorization': localStorage.getItem('token') ? `Bearer ${localStorage.getItem('token')}` : '' } })
       .then(r => r.json())
       .then(setUsers)
       .catch(e => setError(e.message))
@@ -288,7 +288,7 @@ function TemplateModal({ template, onClose, onSave }: { template: any, onClose: 
   useEffect(() => {
     if (tab !== 'Products') return;
     setLoading(true);
-    fetch(`${API_URL}/api/products`)
+  fetch(`${API_URL}/api/products`, { headers: { 'Authorization': localStorage.getItem('token') ? `Bearer ${localStorage.getItem('token')}` : '' } })
       .then(r => r.json())
       .then(setProducts)
       .catch(e => setError(e.message))
@@ -299,7 +299,7 @@ function TemplateModal({ template, onClose, onSave }: { template: any, onClose: 
   useEffect(() => {
     if (tab !== 'Templates') return;
     setLoading(true);
-    fetch(`${API_URL}/api/templates`)
+  fetch(`${API_URL}/api/templates`, { headers: { 'Authorization': localStorage.getItem('token') ? `Bearer ${localStorage.getItem('token')}` : '' } })
       .then(r => r.json())
       .then(setTemplates)
       .catch(e => setError(e.message))

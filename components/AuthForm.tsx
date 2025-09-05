@@ -2,7 +2,7 @@ import { API_URL } from '../hooks/useCrmData';
 import React, { useEffect, useState } from 'react';
 
 interface AuthFormProps {
-  onAuthSuccess: (token: string, user: { name: string; initials: string }) => void;
+  onAuthSuccess: (token: string, user: { name: string; initials: string; role?: string }) => void;
 }
 
 export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
@@ -40,7 +40,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
           regRes = await fetch(`${base}/api/session/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ email: username, username, password })
           });
         } catch (e) {
           // Network/adblock error: treat as missing and try next route
@@ -52,7 +52,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
             regRes = await fetch(`${base}/api/auth/register`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username, password })
+              body: JSON.stringify({ email: username, username, password })
             });
           } catch {
             regRes = null;
@@ -62,15 +62,20 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
             regRes = await fetch(`${base}/api/_/register`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username, password })
+              body: JSON.stringify({ email: username, username, password })
             });
           }
         }
         if (!regRes.ok) {
-          const regTxt = await regRes.text().catch(() => '');
-          let msg = 'Registration failed';
-          try { const j = JSON.parse(regTxt); if (j?.error) msg = j.error; } catch {}
-          throw new Error(`${msg}${regTxt ? ` (${regRes.status})` : ''}`);
+          // If user already exists, flip to login and continue
+          if (regRes.status === 409) {
+            setMode('login');
+          } else {
+            const regTxt = await regRes.text().catch(() => '');
+            let msg = 'Registration failed';
+            try { const j = JSON.parse(regTxt); if (j?.error) msg = j.error; } catch {}
+            throw new Error(`${msg}${regTxt ? ` (${regRes.status})` : ''}`);
+          }
         }
       }
       // Then login to obtain JWT and user info
@@ -79,7 +84,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         res = await fetch(`${base}/api/session/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ email: username, username, password })
         });
       } catch {
         // Network/adblock error, try alias
@@ -91,7 +96,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
           res = await fetch(`${base}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ email: username, username, password })
           });
         } catch {
           res = null;
@@ -101,7 +106,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
           res = await fetch(`${base}/api/_/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ email: username, username, password })
           });
         }
       }
@@ -128,7 +133,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         const snippet = (text || '').slice(0, 160).replace(/\s+/g, ' ').trim();
         throw new Error(snippet ? `Unexpected response: ${snippet}` : 'Unexpected response from server');
       }
-      onAuthSuccess(data.token, data.user || { name: username, initials: username.slice(0, 2).toUpperCase() });
+      onAuthSuccess(
+        data.token,
+        data.user || { name: username, initials: username.slice(0, 2).toUpperCase() }
+      );
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -147,8 +155,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
   <p className="mb-6 text-gray-500 text-center">{mode === 'login' ? 'Welcome back! Please sign in to your account.' : 'Create an account to continue.'}</p>
         <input
           className="w-full mb-3 p-3 border border-blue-200 dark:border-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-          type="text"
-          placeholder="Username"
+          type="email"
+          placeholder="Email"
           value={username}
           onChange={e => setUsername(e.target.value)}
           required

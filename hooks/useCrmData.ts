@@ -245,7 +245,7 @@ export const useCrmData = () => {
         try {
             const res = await fetch(`${API_URL}/api/team-members/${member.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify({
                     first_name: member.first_name,
                     last_name: member.last_name,
@@ -573,7 +573,7 @@ export const useCrmData = () => {
             }
             const res = await fetch(`${API_URL}/api/companies`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify({ ...newCompany, type: normalizedType })
             });
             if (!res.ok) throw new Error('Failed to add company');
@@ -595,7 +595,7 @@ export const useCrmData = () => {
             if (!payload?.name) throw new Error('Name is required');
             const res = await fetch(`${API_URL}/api/companies`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify(payload)
             });
             if (!res.ok) {
@@ -630,7 +630,7 @@ export const useCrmData = () => {
             delete body.id;
             const res = await fetch(`${API_URL}/api/companies/${id}` , {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify(body)
             });
             if (!res.ok) throw new Error('Failed to update company');
@@ -649,7 +649,7 @@ export const useCrmData = () => {
         const idNum = Number(id);
         if (!Number.isInteger(idNum)) { setCompanies(prev => prev.filter(c => c.id !== id)); return; }
         try {
-            const res = await fetch(`${API_URL}/api/companies/${idNum}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/companies/${idNum}`, { method: 'DELETE', headers: { ...authHeaders() } });
             if (!res.ok && res.status !== 204) throw new Error('Failed to delete company');
             setCompanies(prev => prev.filter(c => String(c.id) !== String(idNum)));
         } catch (err) {
@@ -673,7 +673,7 @@ export const useCrmData = () => {
             }
             const res = await fetch(`${API_URL}/api/contacts`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify({
                     name: newContact.name,
                     email: newContact.email,
@@ -699,7 +699,7 @@ export const useCrmData = () => {
         try {
             const res = await fetch(`${API_URL}/api/team-members`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify({
                     first_name: newMember.first_name,
                     last_name: newMember.last_name,
@@ -728,7 +728,7 @@ export const useCrmData = () => {
             return;
         }
         try {
-            const res = await fetch(`${API_URL}/api/team-members/${memberId}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/team-members/${memberId}`, { method: 'DELETE', headers: { ...authHeaders() } });
             if (!res.ok && res.status !== 204) throw new Error('Failed to delete team member');
             setProjects(prevProjects =>
                 prevProjects.map(p => p.salesRepId === memberId ? { ...p, salesRepId: undefined } : p)

@@ -69,13 +69,6 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({ contacts = [], compa
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
-            {contactList.length === 0 && editingId === null && (
-              <tr>
-                <td colSpan={6} className="text-center py-8 text-gray-400 dark:text-gray-500">
-                  No contacts yet. Click <span className="font-semibold text-blue-600">Add Contact</span> to create your first contact.
-                </td>
-              </tr>
-            )}
             {contactList.map(contact => (
               editingId === contact.id ? (
                 <tr key={contact.id} className="bg-blue-50 dark:bg-gray-700/60">

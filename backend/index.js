@@ -1,7 +1,6 @@
-
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
+import cors from 'cors';
 import pkg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -10,11 +9,6 @@ import fs from 'fs';
 import { promises as fsp } from 'fs';
 import { fileURLToPath } from 'url';
 
-// --- Global error handlers for better Azure diagnostics ---
-process.on('unhandledRejection', (reason, p) => {
-  console.error('Unhandled Rejection at:', p, 'reason:', reason);
-  process.exit(1);
-});
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception thrown:', err);
   process.exit(1);
@@ -22,24 +16,26 @@ process.on('uncaughtException', (err) => {
 
 const { Pool } = pkg;
 
+// Load env from .env (local dev) if present
+dotenv.config();
 
-// ESM-compatible __dirname then load .env from backend directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.join(__dirname, '.env') });
-
-// --- Check for required environment variables ---
+// --- Check for required environment variables (warn for local dev) ---
 if (!process.env.DATABASE_URL) {
-  console.error('[FATAL] DATABASE_URL environment variable is not set. Set it in Azure App Service > Configuration > Application settings.');
-  process.exit(1);
+  console.warn('[WARN] DATABASE_URL not set; defaulting to local postgres (postgres://crmuser:crmpassword@localhost:5432/crmdb).');
 }
 if (!process.env.JWT_SECRET) {
   console.warn('[WARN] JWT_SECRET environment variable is not set. Using default value.');
 }
-
 const app = express();
 const port = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
+
+// Simple email validator (good-enough pattern)
+function isValidEmail(s) {
+  const str = String(s || '').trim();
+  // basic pattern: local@domain.tld (no spaces)
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(str);
+}
 
 // Filesystem root for corporate file shares (e.g., G:\\ on Framo servers)
 // Configure via FILE_SHARE_ROOT or G_DRIVE_PATH. In dev, defaults to ./files
@@ -148,6 +144,48 @@ app.use((req, res, next) => {
   next();
 });
 
+  // Build a rich user profile payload (name, initials, role, first/last) using team_members linkage when available
+  async function buildUserPayload(user) {
+    try {
+      let tm = null;
+      try {
+        const r = await pool.query('SELECT first_name, last_name, initials FROM team_members WHERE user_id = $1 LIMIT 1', [user.id]);
+        tm = r.rows[0] || null;
+      } catch {}
+      let firstName = tm?.first_name || null;
+      let lastName = tm?.last_name || null;
+      let initials = tm?.initials || null;
+      const uname = String(user.username || '').toLowerCase();
+      // Special-case friendly names for known admins if team member linkage is missing
+      if (!firstName) {
+        if (uname === 'reki@framo.no') firstName = 'Reno';
+        else if (uname === 'rsak@framo.no') firstName = 'Rune';
+      }
+      if (!initials) {
+        const i1 = (firstName || '').charAt(0);
+        const i2 = (lastName || '').charAt(0);
+        const comp = (i1 + i2) || String(user.username || '').slice(0, 2);
+        initials = String(comp).toUpperCase();
+      }
+      const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || user.username;
+      return {
+        name: displayName,
+        initials,
+        role: user.role,
+        first_name: firstName || undefined,
+        last_name: lastName || undefined,
+        email: user.email || user.username,
+      };
+    } catch {
+      return {
+        name: user.username,
+        initials: String(user.username || '').slice(0, 2).toUpperCase(),
+        role: user.role,
+        email: user.email || user.username,
+      };
+    }
+  }
+
 // Simple health endpoint
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
@@ -254,6 +292,76 @@ pool.on('error', (err) => {
     }
   } catch (e) {
     console.warn('[Auth] Bootstrap check failed:', e?.message || e);
+  }
+})();
+
+// --- Special admin accounts bootstrap (Reno & Rune) ---
+// Ensures these two exist with email-as-username and known initial passwords.
+// This runs idempotently on startup.
+(async () => {
+  try {
+    const specials = [
+      { email: 'reki@framo.no', password: 'reki', role: 'admin', first_name: 'Reno' },
+      { email: 'rsak@framo.no', password: 'rsak', role: 'admin', first_name: 'Rune' },
+    ];
+    // Detect if users.role column exists to keep compatibility with older schemas
+    let hasRoleCol = false;
+    try {
+      const { rows: roleRows } = await pool.query(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='role' LIMIT 1"
+      );
+      hasRoleCol = roleRows.length > 0;
+    } catch {}
+    for (const s of specials) {
+      const email = String(s.email).toLowerCase();
+      const hash = await bcrypt.hash(s.password, 10);
+      const found = await pool.query('SELECT id FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [email]);
+      if (found.rows.length) {
+        const id = found.rows[0].id;
+        if (hasRoleCol) {
+          await pool.query(
+            'UPDATE users SET username=$1, email=$1, role=$2, password=$3 WHERE id=$4',
+            [email, s.role, hash, id]
+          );
+        } else {
+          await pool.query(
+            'UPDATE users SET username=$1, email=$1, password=$2 WHERE id=$3',
+            [email, hash, id]
+          );
+        }
+        // Ensure a team_members row is linked for proper names
+        try {
+          const tm = await pool.query('SELECT id FROM team_members WHERE user_id = $1', [id]);
+          if (tm.rows.length) {
+            await pool.query('UPDATE team_members SET first_name = COALESCE(first_name,$1) WHERE user_id = $2', [s.first_name, id]);
+          } else {
+            await pool.query('INSERT INTO team_members (first_name, user_id) VALUES ($1, $2)', [s.first_name, id]);
+          }
+        } catch {}
+      } else {
+        if (hasRoleCol) {
+          await pool.query(
+            'INSERT INTO users (username, email, role, password) VALUES ($1, $1, $2, $3)',
+            [email, s.role, hash]
+          );
+        } else {
+          await pool.query(
+            'INSERT INTO users (username, email, password) VALUES ($1, $1, $2)',
+            [email, hash]
+          );
+        }
+        try {
+          const created = await pool.query('SELECT id FROM users WHERE lower(email)=lower($1) LIMIT 1', [email]);
+          const id = created.rows[0]?.id;
+          if (id) {
+            await pool.query('INSERT INTO team_members (first_name, user_id) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING', [s.first_name, id]);
+          }
+        } catch {}
+      }
+    }
+    console.log('[Auth] Ensured special admin accounts (Reno, Rune).');
+  } catch (e) {
+    console.warn('[Auth] Special admins bootstrap failed:', e?.message || e);
   }
 })();
 
@@ -518,41 +626,39 @@ async function listDirectory(dir) {
 }
 
 // --- Auth endpoints ---
-// Register
+// Register (email is the username)
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
-    const userExists = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    if (userExists.rows.length > 0) return res.status(409).json({ error: 'User already exists' });
-  // bcryptjs is always available if required
-    const hash = await bcrypt.hash(password, 10);
-    const { rows } = await pool.query('INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id, username', [username, hash]);
-    res.status(201).json({ user: rows[0] });
+  const { email: rawEmail, username: rawUser, password } = req.body || {};
+  const email = String(rawEmail || rawUser || '').toLowerCase().trim();
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Valid email is required' });
+  if (!password) return res.status(400).json({ error: 'Password required' });
+  // unique by email or username (case-insensitive)
+  const userExists = await pool.query('SELECT 1 FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [email]);
+  if (userExists.rows.length > 0) return res.status(409).json({ error: 'User already exists' });
+  const hash = await bcrypt.hash(password, 10);
+  const { rows } = await pool.query('INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email', [email, email, hash]);
+  res.status(201).json({ user: rows[0] });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Login
+// Login (accept email or username; both mapped to same user)
 app.post('/api/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+  const { email: rawEmail, username: rawUser, password } = req.body || {};
+  const identifier = String(rawEmail || rawUser || '').trim();
+  const { rows } = await pool.query('SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [identifier]);
     const user = rows[0];
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
   // bcryptjs is always available if required
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({
-      token,
-      user: {
-        name: user.username,
-        initials: user.username.slice(0, 2).toUpperCase()
-      }
-    });
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+  const payload = await buildUserPayload(user);
+  res.json({ token, user: payload });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -562,13 +668,15 @@ app.post('/api/login', async (req, res) => {
 // Alternate auth paths (avoid ad-blockers that might block "/login")
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
-    const userExists = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    if (userExists.rows.length > 0) return res.status(409).json({ error: 'User already exists' });
-    const hash = await bcrypt.hash(password, 10);
-    const { rows } = await pool.query('INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id, username', [username, hash]);
-    res.status(201).json({ user: rows[0] });
+  const { email: rawEmail, username: rawUser, password } = req.body || {};
+  const email = String(rawEmail || rawUser || '').toLowerCase().trim();
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Valid email is required' });
+  if (!password) return res.status(400).json({ error: 'Password required' });
+  const exists = await pool.query('SELECT 1 FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [email]);
+  if (exists.rows.length > 0) return res.status(409).json({ error: 'User already exists' });
+  const hash = await bcrypt.hash(password, 10);
+  const { rows } = await pool.query('INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email', [email, email, hash]);
+  res.status(201).json({ user: rows[0] });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -577,17 +685,16 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+  const { email: rawEmail, username: rawUser, password } = req.body || {};
+  const identifier = String(rawEmail || rawUser || '').trim();
+  const { rows } = await pool.query('SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [identifier]);
     const user = rows[0];
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({
-      token,
-      user: { name: user.username, initials: user.username.slice(0, 2).toUpperCase() }
-    });
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+  const payload = await buildUserPayload(user);
+  res.json({ token, user: payload });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -597,13 +704,15 @@ app.post('/api/auth/login', async (req, res) => {
 // Adblock-safe alias endpoints (prefer these in the frontend)
 app.post('/api/session/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
-    const userExists = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    if (userExists.rows.length > 0) return res.status(409).json({ error: 'User already exists' });
-    const hash = await bcrypt.hash(password, 10);
-    const { rows } = await pool.query('INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id, username', [username, hash]);
-    res.status(201).json({ user: rows[0] });
+  const { email: rawEmail, username: rawUser, password } = req.body || {};
+  const email = String(rawEmail || rawUser || '').toLowerCase().trim();
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Valid email is required' });
+  if (!password) return res.status(400).json({ error: 'Password required' });
+  const exists = await pool.query('SELECT 1 FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [email]);
+  if (exists.rows.length > 0) return res.status(409).json({ error: 'User already exists' });
+  const hash = await bcrypt.hash(password, 10);
+  const { rows } = await pool.query('INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email', [email, email, hash]);
+  res.status(201).json({ user: rows[0] });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -624,17 +733,16 @@ app.get('/api/auth/has-users', async (req, res) => {
 
 app.post('/api/session/start', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+  const { email: rawEmail, username: rawUser, password } = req.body || {};
+  const identifier = String(rawEmail || rawUser || '').trim();
+  const { rows } = await pool.query('SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [identifier]);
     const user = rows[0];
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({
-      token,
-      user: { name: user.username, initials: user.username.slice(0, 2).toUpperCase() }
-    });
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+  const payload = await buildUserPayload(user);
+  res.json({ token, user: payload });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -644,13 +752,15 @@ app.post('/api/session/start', async (req, res) => {
 // Minimal alias that avoids common adblock keyword filters
 app.post('/api/_/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
-    const userExists = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    if (userExists.rows.length > 0) return res.status(409).json({ error: 'User already exists' });
-    const hash = await bcrypt.hash(password, 10);
-    const { rows } = await pool.query('INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id, username', [username, hash]);
-    res.status(201).json({ user: rows[0] });
+  const { email: rawEmail, username: rawUser, password } = req.body || {};
+  const email = String(rawEmail || rawUser || '').toLowerCase().trim();
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Valid email is required' });
+  if (!password) return res.status(400).json({ error: 'Password required' });
+  const exists = await pool.query('SELECT 1 FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [email]);
+  if (exists.rows.length > 0) return res.status(409).json({ error: 'User already exists' });
+  const hash = await bcrypt.hash(password, 10);
+  const { rows } = await pool.query('INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email', [email, email, hash]);
+  res.status(201).json({ user: rows[0] });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -659,19 +769,34 @@ app.post('/api/_/register', async (req, res) => {
 
 app.post('/api/_/start', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+  const { email: rawEmail, username: rawUser, password } = req.body || {};
+  const identifier = String(rawEmail || rawUser || '').trim();
+  const { rows } = await pool.query('SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [identifier]);
     const user = rows[0];
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({
-      token,
-      user: { name: user.username, initials: user.username.slice(0, 2).toUpperCase() }
-    });
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+  const payload = await buildUserPayload(user);
+  res.json({ token, user: payload });
   } catch (err) {
     console.error('Login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Current user info from token
+app.get('/api/me', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user && req.user.id;
+    if (!uid) return res.status(401).json({ error: 'Invalid token' });
+    const r = await pool.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [uid]);
+    const user = r.rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const payload = await buildUserPayload(user);
+    res.json({ user: payload });
+  } catch (err) {
+    console.error('Me endpoint error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -683,6 +808,20 @@ function requireAuth(req, res, next) {
   try {
     const token = auth.split(' ')[1];
     req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+// Admin-only middleware (auth + role check)
+function requireAdmin(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth) return res.status(401).json({ error: 'No token' });
+  try {
+    const token = auth.split(' ')[1];
+    req.user = jwt.verify(token, JWT_SECRET);
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     next();
   } catch {
     res.status(401).json({ error: 'Invalid token' });
@@ -951,8 +1090,8 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
 
 
 // --- Team Members CRUD Endpoints ---
-// Get all team members
-app.get('/api/team-members', async (req, res) => {
+// Get all team members (admin only)
+app.get('/api/team-members', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM team_members ORDER BY id DESC');
     res.json(rows);
@@ -1000,7 +1139,7 @@ app.get('/api/companies', async (req, res) => {
   }
 });
 
-app.post('/api/companies', async (req, res) => {
+app.post('/api/companies', requireAdmin, async (req, res) => {
   try {
     const { name, type, location, address, website } = req.body;
     if (!name) return res.status(400).json({ error: 'Missing name' });
@@ -1050,7 +1189,7 @@ app.post('/api/companies', async (req, res) => {
   }
 });
 
-app.put('/api/companies/:id', async (req, res) => {
+app.put('/api/companies/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const body = req.body || {};
@@ -1149,7 +1288,7 @@ app.put('/api/companies/:id', async (req, res) => {
 
 // CSV import endpoint removed
 
-app.delete('/api/companies/:id', async (req, res) => {
+app.delete('/api/companies/:id', requireAdmin, async (req, res) => {
   try {
     const idNum = Number(req.params.id);
     if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
@@ -1172,7 +1311,7 @@ app.get('/api/contacts', async (req, res) => {
   }
 });
 
-app.post('/api/contacts', async (req, res) => {
+app.post('/api/contacts', requireAdmin, async (req, res) => {
   try {
     // Accept both companyId and company_id for compatibility
     const { name, email, phone, companyId, company_id } = req.body;
@@ -1189,7 +1328,7 @@ app.post('/api/contacts', async (req, res) => {
   }
 });
 
-app.put('/api/contacts/:id', async (req, res) => {
+app.put('/api/contacts/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     // Accept both companyId and company_id for compatibility
@@ -1207,7 +1346,7 @@ app.put('/api/contacts/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/contacts/:id', async (req, res) => {
+app.delete('/api/contacts/:id', requireAdmin, async (req, res) => {
   try {
     const idNum = Number(req.params.id);
     if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
@@ -1238,7 +1377,7 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', requireAdmin, async (req, res) => {
   try {
     const { projectId, type, quantity, capacity, head } = req.body;
     if (!projectId || !type || !quantity) return res.status(400).json({ error: 'Missing fields' });
@@ -1253,7 +1392,7 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
-app.put('/api/products/:id', async (req, res) => {
+app.put('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { projectId, type, quantity, capacity, head } = req.body;
@@ -1278,7 +1417,7 @@ app.put('/api/products/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const idNum = Number(req.params.id);
     if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
@@ -1425,7 +1564,7 @@ app.get('/api/projects/:id/members', async (req, res) => {
 });
 
 // Add a member to a project
-app.post('/api/projects/:id/members', requireAuth, async (req, res) => {
+app.post('/api/projects/:id/members', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const pid = coerceProjectId(id);
@@ -1447,7 +1586,7 @@ app.post('/api/projects/:id/members', requireAuth, async (req, res) => {
 });
 
 // Update a project member (role)
-app.put('/api/project-members/:memberId', requireAuth, async (req, res) => {
+app.put('/api/project-members/:memberId', requireAdmin, async (req, res) => {
   try {
     const { memberId } = req.params;
     const { role = null } = req.body || {};
@@ -1464,7 +1603,7 @@ app.put('/api/project-members/:memberId', requireAuth, async (req, res) => {
 });
 
 // Remove a project member
-app.delete('/api/project-members/:memberId', requireAuth, async (req, res) => {
+app.delete('/api/project-members/:memberId', requireAdmin, async (req, res) => {
   try {
     const { memberId } = req.params;
     await pool.query('DELETE FROM project_members WHERE id = $1', [memberId]);
@@ -1486,18 +1625,10 @@ app.get('/api/project-files', async (req, res) => {
   }
 });
 
-// --- Admin: Product description templates (protected by ADMIN_USERS) ---
-function isAdmin(req) {
-  try {
-    const list = (process.env.ADMIN_USERS || '').split(',').map(s => s.trim()).filter(Boolean);
-    if (!list.length) return true; // if not configured, allow in dev
-    const u = (req.user && (req.user.username || req.user.name)) || '';
-    return !!list.find(x => x.toLowerCase() === String(u || '').toLowerCase());
-  } catch { return false; }
-}
+// --- Admin: Product description templates ---
+// Switch protection to requireAdmin middleware on endpoints below.
 
-app.get('/api/admin/product-descriptions', requireAuth, async (req, res) => {
-  if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
+app.get('/api/admin/product-descriptions', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT key, scope_template, updated_at FROM product_descriptions ORDER BY key');
     res.json(rows);
@@ -1507,8 +1638,7 @@ app.get('/api/admin/product-descriptions', requireAuth, async (req, res) => {
   }
 });
 
-app.put('/api/admin/product-descriptions/:key', requireAuth, async (req, res) => {
-  if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
+app.put('/api/admin/product-descriptions/:key', requireAdmin, async (req, res) => {
   try {
     const k = String(req.params.key || '').trim();
     const tpl = String(req.body?.scope_template || '');
@@ -2354,7 +2484,7 @@ app.post('/api/projects/:id/activities/mark-read', requireAuth, async (req, res)
   }
 });
 // Add a team member
-app.post('/api/team-members', async (req, res) => {
+app.post('/api/team-members', requireAdmin, async (req, res) => {
   try {
     const { first_name, last_name, initials, jobTitle } = req.body;
     if (!first_name || !last_name || !initials || !jobTitle) return res.status(400).json({ error: 'Missing fields' });
@@ -2370,7 +2500,7 @@ app.post('/api/team-members', async (req, res) => {
 });
 
 // Delete a team member
-app.delete('/api/team-members/:id', async (req, res) => {
+app.delete('/api/team-members/:id', requireAdmin, async (req, res) => {
   try {
     const idNum = Number(req.params.id);
     if (!Number.isInteger(idNum)) return res.status(400).json({ error: 'Invalid id' });
@@ -2383,7 +2513,7 @@ app.delete('/api/team-members/:id', async (req, res) => {
 });
 
 // Update a team member
-app.put('/api/team-members/:id', async (req, res) => {
+app.put('/api/team-members/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { first_name, last_name, initials, jobTitle } = req.body;

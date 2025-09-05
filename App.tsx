@@ -115,6 +115,40 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
     const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
 
+    // Derive a friendly first name for greetings
+    const derivedFirstName = useMemo(() => {
+        try {
+            // 0) Prefer first_name coming directly from the authenticated user payload
+            const fromUser = (user as any)?.first_name;
+            if (fromUser && String(fromUser).trim()) return String(fromUser).trim();
+            // 1) Prefer team member mapping by initials
+            const tm = teamMembers.find(
+                t => t.initials && t.initials.toLowerCase() === (user.initials || '').toLowerCase()
+            );
+            if (tm?.first_name) return tm.first_name;
+
+            // 2) Use the first token of the provided name if it looks like a human name
+            const rawName = String(user?.name || '').trim();
+            const spaceIdx = rawName.indexOf(' ');
+            if (spaceIdx > 0) {
+                const first = rawName.slice(0, spaceIdx).trim();
+                if (first) return first.charAt(0).toUpperCase() + first.slice(1);
+            }
+
+            // 3) If name looks like an email, derive from local-part (before @), split on separators
+            if (rawName.includes('@')) {
+                const local = rawName.split('@')[0] || '';
+                const token = (local.split(/[._-]/)[0] || '').trim();
+                if (token) return token.charAt(0).toUpperCase() + token.slice(1);
+            }
+
+            // 4) Fallback to entire name or empty
+            return rawName || '';
+        } catch {
+            return '';
+        }
+    }, [teamMembers, user]);
+
     // Capability check: only show Templates if backend allows admin endpoints
     useEffect(() => {
         let mounted = true;
@@ -257,13 +291,7 @@ const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 {activeView === 'dashboard' && (
                     <main className="flex-1 overflow-y-auto p-0">
                         {/* Find team member by initials (case-insensitive) and use their first_name, fallback to username */}
-                        <Dashboard
-                            userFirstName={
-                                (teamMembers.find(
-                                    tm => tm.initials && tm.initials.toLowerCase() === user.initials?.toLowerCase()
-                                )?.first_name) || user.name.split(' ')[0] || user.name || ''
-                            }
-                        />
+                        <Dashboard userFirstName={derivedFirstName} />
                     </main>
                 )}
                 {activeView === 'companyInfo' && (
