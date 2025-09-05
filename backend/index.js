@@ -37,6 +37,29 @@ function isValidEmail(s) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(str);
 }
 
+// Find user by identifier (email or username) with smart fallbacks.
+// If no direct match and identifier has no '@', try appending '@framo.no'.
+async function findUserFlexible(identifier) {
+  const id = String(identifier || '').trim();
+  if (!id) return null;
+  try {
+    let { rows } = await pool.query(
+      'SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1',
+      [id]
+    );
+    if (rows.length) return rows[0];
+    if (!id.includes('@')) {
+      const guess = `${id}@framo.no`;
+      ({ rows } = await pool.query(
+        'SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1',
+        [guess]
+      ));
+      if (rows.length) return rows[0];
+    }
+  } catch {}
+  return null;
+}
+
 // Filesystem root for corporate file shares (e.g., G:\\ on Framo servers)
 // Configure via FILE_SHARE_ROOT or G_DRIVE_PATH. In dev, defaults to ./files
 const FILE_SHARE_ROOT = process.env.FILE_SHARE_ROOT
@@ -727,8 +750,7 @@ app.post('/api/login', async (req, res) => {
   try {
   const { email: rawEmail, username: rawUser, password } = req.body || {};
   const identifier = String(rawEmail || rawUser || '').trim();
-  const { rows } = await pool.query('SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [identifier]);
-    const user = rows[0];
+  const user = await findUserFlexible(identifier);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
   // bcryptjs is always available if required
     const valid = await bcrypt.compare(password, user.password);
@@ -764,8 +786,7 @@ app.post('/api/auth/login', async (req, res) => {
   try {
   const { email: rawEmail, username: rawUser, password } = req.body || {};
   const identifier = String(rawEmail || rawUser || '').trim();
-  const { rows } = await pool.query('SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [identifier]);
-    const user = rows[0];
+  const user = await findUserFlexible(identifier);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
@@ -812,8 +833,7 @@ app.post('/api/session/start', async (req, res) => {
   try {
   const { email: rawEmail, username: rawUser, password } = req.body || {};
   const identifier = String(rawEmail || rawUser || '').trim();
-  const { rows } = await pool.query('SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [identifier]);
-    const user = rows[0];
+  const user = await findUserFlexible(identifier);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
@@ -848,8 +868,7 @@ app.post('/api/_/start', async (req, res) => {
   try {
   const { email: rawEmail, username: rawUser, password } = req.body || {};
   const identifier = String(rawEmail || rawUser || '').trim();
-  const { rows } = await pool.query('SELECT * FROM users WHERE lower(username)=lower($1) OR lower(email)=lower($1) LIMIT 1', [identifier]);
-    const user = rows[0];
+  const user = await findUserFlexible(identifier);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
