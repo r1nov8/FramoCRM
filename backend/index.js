@@ -211,7 +211,19 @@ app.use((req, res, next) => {
 
 // Simple health endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, uptime: process.uptime() });
+  let dbHost = null;
+  try {
+    if (RAW_DB_URL) {
+      const u = new URL(RAW_DB_URL);
+      dbHost = u.hostname + (u.port ? ':' + u.port : '');
+    }
+  } catch {}
+  res.json({
+    ok: true,
+    uptime: process.uptime(),
+    commit: process.env.APP_COMMIT || null,
+    dbHost
+  });
 });
 
 // Lightweight debug info to verify deployment wiring (DB target, schema flags, user counts)
