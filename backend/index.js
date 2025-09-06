@@ -59,6 +59,16 @@ const app = express();
 const port = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'changeme';
 
+// Lightweight version endpoint (always early) to verify deployed commit & db source
+app.get('/api/_version', (req, res) => {
+  res.json({
+    commit: process.env.APP_COMMIT || null,
+    dbSource: (typeof RESOLVED_DB_SOURCE !== 'undefined' ? RESOLVED_DB_SOURCE : null),
+    pid: process.pid,
+    time: new Date().toISOString()
+  });
+});
+
 // Simple email validator (good-enough pattern)
 function isValidEmail(s) {
   const str = String(s || '').trim();
@@ -892,17 +902,23 @@ app.get('/api/auth/has-users', async (req, res) => {
 
 app.post('/api/session/start', async (req, res) => {
   try {
-  const { email: rawEmail, username: rawUser, password } = req.body || {};
-  const identifier = String(rawEmail || rawUser || '').trim();
-  const user = await findUserFlexible(identifier);
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    const { email: rawEmail, username: rawUser, password } = req.body || {};
+    const identifier = String(rawEmail || rawUser || '').trim();
+    const user = await findUserFlexible(identifier);
+    if (!user) {
+      console.warn(`[Auth] Login failed: user not found identifier='${identifier}'`);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-  const payload = await buildUserPayload(user);
-  res.json({ token, user: payload });
+    if (!valid) {
+      console.warn(`[Auth] Login failed: bad password for user id=${user.id} username=${user.username}`);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const payload = await buildUserPayload(user);
+    res.json({ token, user: payload });
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('Login error (/api/session/start):', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
