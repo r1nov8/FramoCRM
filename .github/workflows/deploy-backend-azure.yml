@@ -43,6 +43,11 @@ jobs:
           DATABASE_URL: ${{ secrets.AZURE_DATABASE_URL }}
         run: node scripts/run_migrations.js
 
+      - name: Inject commit hash for runtime version endpoint
+        run: |
+          echo "APP_COMMIT=${GITHUB_SHA}" > backend/.env
+          echo "Wrote backend/.env with APP_COMMIT=${GITHUB_SHA}" && head -n1 backend/.env
+
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
