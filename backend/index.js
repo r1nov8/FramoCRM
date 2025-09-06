@@ -2238,7 +2238,12 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
       try {
         const templatesDir = path.join(__dirname, 'files', 'templates');
         // Prefer the provided file name, fall back to legacy name, then any .docx
-        const preferred = ['Quote Anti-Heeling MAL.docx', 'quote_anti_heeling.docx'];
+        const preferred = [
+          'Quote Anti-Heeling MAL.docx',
+          'quote_anti_heeling.docx',
+          'antiHeelingQuote.docx',
+          'antiHeelingQuote123.docx'
+        ];
         let templatePath = null;
         for (const name of preferred) {
           const p = path.join(templatesDir, name);
@@ -2249,7 +2254,8 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
           const firstDocx = list.find(f => f.toLowerCase().endsWith('.docx'));
           if (firstDocx) templatePath = path.join(templatesDir, firstDocx);
         }
-        if (fs.existsSync(templatePath)) {
+        if (templatePath && fs.existsSync(templatePath)) {
+          console.log(`[QUOTE] Using DOCX template: ${templatePath}`);
           const docxtemplaterMod = await import('docxtemplater');
           const PizZipMod = await import('pizzip');
           const DocxTemplater = docxtemplaterMod.default || docxtemplaterMod;
@@ -2303,8 +2309,12 @@ app.post('/api/projects/:id/generate-quote', requireAuth, async (req, res) => {
           outBuffer = Buffer.from(doc.getZip().generate({ type: 'nodebuffer' }));
           outName = `${prefix}${oppPart}_${fileNameSafe}_${ymd}.docx`;
           outMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        } else {
+          console.error('[QUOTE] No DOCX template found in', templatesDir, 'Tried:', preferred.join(', '));
         }
-      } catch {}
+      } catch (err) {
+        console.error('[QUOTE] Error generating DOCX quote:', err);
+      }
     }
     if (localFormat === 'docx' && !outBuffer) {
       // Build DOCX with a header and an items table
