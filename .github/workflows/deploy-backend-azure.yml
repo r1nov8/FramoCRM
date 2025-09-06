@@ -23,7 +23,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Use same major Node version as Azure App Service runtime (logs show appsvc/node:22-lts)
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
