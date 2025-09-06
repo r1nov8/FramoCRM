@@ -19,6 +19,19 @@ const { Pool } = pkg;
 // Load env from .env (local dev) if present
 dotenv.config();
 
+// Startup diagnostics (printed once) to help identify path issues in Azure App Service
+try {
+  const cwd = process.cwd();
+  const files = fs.readdirSync(cwd).slice(0, 50);
+  console.log(`[STARTUP] CWD: ${cwd}`);
+  console.log(`[STARTUP] Top-level entries: ${files.join(', ')}`);
+  if (!fs.existsSync('index.js') && fs.existsSync('backend/index.js')) {
+    console.warn('[STARTUP] index.js not in CWD but backend/index.js exists. You probably need to run: node backend/index.js as startup command.');
+  }
+} catch (e) {
+  console.warn('[STARTUP] Failed to list directory contents:', e.message);
+}
+
 // --- Resolve database connection string with Azure-friendly fallbacks ---
 function resolveDatabaseUrl() {
   const candidates = [];
