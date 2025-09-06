@@ -24,10 +24,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
 
-      - name: Install backend deps
+      - name: Install backend deps (prod only, skip puppeteer download)
         working-directory: backend
-        run: npm ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: true
+        run: |
+          npm ci --omit=dev
+          echo "Installed production dependencies (dev omitted)."
 
       - name: Run DB migrations (Azure)
         if: ${{ secrets.AZURE_DATABASE_URL != '' }}
@@ -42,6 +48,6 @@ jobs:
         with:
           # App Service name (must match your Azure app)
           app-name: framocrm-backend-faaggrcdgcdbethf
-          # Deploy only backend folder so its contents become site root
-          package: backend
+          # Deploy entire repo; runtime Startup Command will cd backend then node index.js
+          package: .
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
