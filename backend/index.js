@@ -26,6 +26,16 @@ function resolveDatabaseUrl() {
   if (process.env.AZURE_POSTGRESQL_CONNECTIONSTRING) candidates.push({ source: 'AZURE_POSTGRESQL_CONNECTIONSTRING', value: process.env.AZURE_POSTGRESQL_CONNECTIONSTRING });
   if (process.env.POSTGRES_URL) candidates.push({ source: 'POSTGRES_URL', value: process.env.POSTGRES_URL });
   if (process.env.PG_CONNECTION_STRING) candidates.push({ source: 'PG_CONNECTION_STRING', value: process.env.PG_CONNECTION_STRING });
+  // Construct from discrete components if provided (APP_DB_HOST, APP_DB_USER, etc.)
+  const host = process.env.APP_DB_HOST || process.env.PGHOST;
+  const user = process.env.APP_DB_USER || process.env.PGUSER;
+  const password = process.env.APP_DB_PASSWORD || process.env.PGPASSWORD;
+  const database = process.env.APP_DB_NAME || process.env.PGDATABASE;
+  const port = process.env.APP_DB_PORT || process.env.PGPORT;
+  if (!process.env.DATABASE_URL && host && user && database) {
+    const built = `postgres://${encodeURIComponent(user)}${password?':'+encodeURIComponent(password):''}@${host}${port?':'+port:''}/${database}?sslmode=require`;
+    candidates.push({ source: 'COMPOSED_APP_DB_VARS', value: built });
+  }
   // Azure App Service exposes custom connection strings under CUSTOMCONNSTR_<NAME>
   for (const [k,v] of Object.entries(process.env)) {
     if (k.startsWith('CUSTOMCONNSTR_') && /POSTGRES|PG|DB|DATABASE/i.test(k)) {
@@ -347,6 +357,25 @@ const pool = new Pool({
   // On Render (external URL), SSL is required. For local dev, disable.
   ssl: RAW_DB_URL ? { rejectUnauthorized: false, require: true } : false,
 });
+
+// Startup connectivity test and quick admin presence report
+(async () => {
+  try {
+    await pool.query('SELECT 1');
+    console.log('[DB] Initial connectivity check: OK');
+    try {
+      const r = await pool.query("SELECT COUNT(*) FILTER (WHERE role='admin')::int AS admins, COUNT(*)::int AS total FROM users");
+      console.log(`[DB] Users total=${r.rows[0]?.total ?? 'n/a'} admins=${r.rows[0]?.admins ?? 'n/a'}`);
+    } catch (e) {
+      console.warn('[DB] Could not query users table yet:', e.message);
+    }
+  } catch (e) {
+    console.error('[DB] Initial connectivity FAILED:', e.message);
+    if (!RESOLVED_DB_URL && (process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_INSTANCE_ID)) {
+      console.error('[DB] Running in Azure without a configured DATABASE_URL. Set it and restart.');
+    }
+  }
+})();
 
 // Helpful listener to surface initial connection errors clearly
 pool.on('error', (err) => {
