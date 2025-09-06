@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+  "start": "node backend/index.js",
     "dev": "vite",
     "prebuild": "node scripts/gen-build-info.cjs",
     "build": "vite build",
@@ -11,7 +12,7 @@
     "health": "node scripts/health-check.cjs",
     "smoke": "npm run -s health",
     "probe": "node scripts/probe-backends.cjs framocrm.onrender.com framo-crm-backend.onrender.com",
-    "postinstall": "cd backend && npm install"
+  "postinstall": "if [ \"$SKIP_ROOT_POSTINSTALL\" = \"1\" ]; then echo 'Skipping root postinstall'; else (cd backend && npm install); fi"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

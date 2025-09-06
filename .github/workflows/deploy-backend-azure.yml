@@ -36,6 +36,13 @@ jobs:
           npm ci --omit=dev
           echo "Installed production dependencies (dev omitted)."
 
+      - name: Backend quick smoke (version & syntax)
+        working-directory: backend
+        run: |
+          node -e "require('./index.js'); console.log('Loaded index.js (dry load)');" || exit 1
+          grep -q 'app.get('/api/health'' index.js && echo 'Health route present'
+          echo 'Basic load check passed.'
+
       - name: Run DB migrations (Azure)
         if: ${{ secrets.AZURE_DATABASE_URL != '' }}
         working-directory: backend
@@ -57,3 +64,13 @@ jobs:
           # Deploy entire repo; runtime Startup Command will cd backend then node index.js
           package: .
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+
+      - name: Tag successful deployment
+        if: success()
+        run: |
+          git config user.name 'ci'
+          git config user.email 'ci@local'
+          TAG="deploy-$(date +%Y%m%d-%H%M%S)"
+          git tag -f latest-backend "$TAG"
+          git push --tags
+          echo "Tagged deployment as $TAG and updated latest-backend tag"
