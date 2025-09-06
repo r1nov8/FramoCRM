@@ -4,9 +4,7 @@
 name: Build and deploy Node.js app to Azure Web App - framocrm-backend
 
 on:
-  push:
-    branches:
-      - main
+  # Disable automatic deployment from this legacy workflow; keep manual trigger only
   workflow_dispatch:
 
 jobs:

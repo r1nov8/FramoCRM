@@ -39,6 +39,8 @@ jobs:
       - name: Zip backend artifact
         working-directory: backend
         run: |
+          echo "APP_COMMIT=${GITHUB_SHA}" > .env.production
+          grep -q '^APP_COMMIT=' .env.production || echo "APP_COMMIT=${GITHUB_SHA}" >> .env.production
           zip -r backend.zip . -x "node_modules/*" "**/.git*" "**/.DS_Store"
 
       - name: Deploy to Azure Web App
